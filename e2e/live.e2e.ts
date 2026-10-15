@@ -2,11 +2,11 @@ import { expect, test, type Browser, type Page } from '@playwright/test'
 
 const DOC = '#/doc/natural-selection' // no seeded annotations on this one
 
-async function openAs(browser: Browser, userId: string) {
+async function openAs(browser: Browser, userId: string, doc = DOC) {
   const context = await browser.newContext()
   await context.addInitScript(id => sessionStorage.setItem('marginalia:user', id), userId)
   const page = await context.newPage()
-  await page.goto('/' + DOC)
+  await page.goto('/' + doc)
   await expect(page.locator('.status.on')).toHaveText('live') // SSE connected
   await page.evaluate(() => ((window as any).__noReload = true))
   return page
@@ -83,4 +83,46 @@ test('annotate → live to same group → hidden from other group', async ({ bro
   await alice.reload()
   await expect(alice.locator('.reader .hl').first()).toBeVisible()
   await expect(carol.locator('.reader .hl')).toHaveCount(0)
+})
+
+test('edit and delete propagate live; a deleted root keeps its replies; tombstones survive reload', async ({ browser }) => {
+  const civil = '#/doc/civil-disobedience' // seeded: Alice's root on "men first" with a reply from Bob
+  const alice = await openAs(browser, 'u-alice', civil)
+  const bob = await openAs(browser, 'u-bob', civil)
+  alice.on('dialog', d => void d.accept()) // window.confirm on delete
+
+  const thesis = (p: Page) => p.locator('.reader .hl', { hasText: 'men first' })
+
+  // Bob opens the thread and sits on it.
+  await thesis(bob).click()
+  await expect(bob.locator('.side')).toContainText('This is the thesis of the whole essay')
+  await expect(bob.locator('.side')).toContainText('Bob Okafor')
+  // Edit/Delete show only on your own posts: of the two posts here, Bob owns just his reply.
+  await expect(bob.locator('.side [data-action=edit]')).toHaveCount(1)
+
+  // Alice edits; Bob's open panel updates live, marked "(edited)".
+  await thesis(alice).click()
+  await alice.locator('.post').first().locator('[data-action=edit]').click()
+  await alice.locator('.side textarea').first().fill('EDITED: the thesis, reworded.')
+  await alice.getByRole('button', { name: 'Save' }).click()
+  await expect(bob.locator('.side')).toContainText('EDITED: the thesis, reworded.', { timeout: 5000 })
+  await expect(bob.locator('.side')).not.toContainText('This is the thesis of the whole essay')
+  await expect(bob.locator('.side')).toContainText('(edited)')
+
+  // Alice deletes the root. Bob sees it become "[deleted]", the reply survives, and the highlight is gone.
+  await alice.locator('.post').first().locator('[data-action=delete]').click()
+  await expect(bob.locator('.side')).toContainText('[deleted]', { timeout: 5000 })
+  await expect(bob.locator('.side')).toContainText('I think so, but Thoreau skips over')
+  await expect(bob.locator('.side')).not.toContainText('EDITED')
+  await expect(thesis(bob)).toHaveCount(0)
+
+  // Closing the panel: the orphaned replies are still reachable from the overview.
+  await bob.locator('.side').getByRole('button', { name: '✕' }).click()
+  await expect(bob.locator('.side')).toContainText('Replies to deleted comments')
+
+  // A fresh load (snapshot, not live events) agrees: the tombstone is part of synced state.
+  await bob.reload()
+  await expect(bob.locator('.status.on')).toHaveText('live')
+  await expect(thesis(bob)).toHaveCount(0)
+  await expect(bob.locator('.side')).toContainText('Replies to deleted comments')
 })

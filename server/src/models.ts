@@ -47,6 +47,15 @@ export interface AnnotationDoc {
   /** Embedded rather than a separate votes collection: a post's voters are small, bounded, and always read with it. */
   upvoterIds: string[]
   createdAt: Date
+  /** Set when the author edits the body. */
+  editedAt: Date | null
+  /**
+   * Soft delete. A hard delete can't be replayed: replay is "current state of everything changed after
+   * seq N", and a vanished row is not a changed row, so an offline client would never learn it was removed.
+   * A tombstone is a normal write (new seq, change-stream event, replayed like any other), with the body and
+   * votes wiped. Docs written before this field existed read as `undefined`, which `{ deletedAt: null }` matches.
+   */
+  deletedAt: Date | null
 }
 
 export interface CounterDoc {

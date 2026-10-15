@@ -4,15 +4,18 @@ import { HTTPException } from 'hono/http-exception'
 import { streamSSE } from 'hono/streaming'
 import { documents, groups, users } from './db'
 import type { UserDoc } from './models'
+import { boundedSender } from './realtime/bounded-sender'
 import { hub } from './realtime/hub'
-import { createAnnotationBody, createReplyBody, idParam, scoringConfigSchema, streamQuery, validate } from './schemas'
-import { createReply, createRoot, snapshot, toDTO, toggleUpvote, type Student } from './services/annotations'
+import { createAnnotationBody, createReplyBody, editBody, idParam, scoringConfigSchema, streamQuery, validate } from './schemas'
+import { createReply, createRoot, deleteAnnotation, editAnnotation, snapshot, toDTO, toggleUpvote, type Student } from './services/annotations'
 import { AppError } from './services/errors'
 import { getScoringConfig, scoresForDocument, setScoringConfig } from './services/scores'
 
 type Env = { Variables: { user: UserDoc } }
 
 export const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MS ?? 20_000)
+/** Max unsent writes per SSE client before we cut it off (see bounded-sender.ts). */
+export const MAX_PENDING_WRITES = Number(process.env.SSE_MAX_PENDING ?? 500)
 
 /** No real auth: the caller names a seeded user. The server still derives group membership from its own records. */
 const auth = createMiddleware<Env>(async (c, next) => {
@@ -88,6 +91,17 @@ export const app = new Hono<Env>()
     return c.json(toDTO(await createReply(user, c.req.valid('param').id, c.req.valid('json').body)), 201)
   })
 
+  .patch('/annotations/:id', validate('param', idParam), validate('json', editBody), async c => {
+    const user = asStudent(c.get('user'))
+    return c.json(toDTO(await editAnnotation(user, c.req.valid('param').id, c.req.valid('json').body)))
+  })
+
+  // Returns the tombstone (not 204) so the caller can apply it by id exactly like a live event.
+  .delete('/annotations/:id', validate('param', idParam), async c => {
+    const user = asStudent(c.get('user'))
+    return c.json(toDTO(await deleteAnnotation(user, c.req.valid('param').id)))
+  })
+
   .post('/annotations/:id/upvote', validate('param', idParam), async c => {
     const user = asStudent(c.get('user'))
     return c.json(toDTO(await toggleUpvote(user, c.req.valid('param').id)))
@@ -102,20 +116,29 @@ export const app = new Hono<Env>()
 
     c.header('X-Accel-Buffering', 'no') // nginx: don't buffer the stream
     return streamSSE(c, async stream => {
-      // Serialize every write (events + heartbeats) through one promise chain.
-      let tail: Promise<unknown> = Promise.resolve()
-      const enqueue = (fn: () => Promise<unknown>) => (tail = tail.then(fn).catch(() => {}))
+      // All writes (events + heartbeats) go through one bounded queue per client. A client that stops
+      // draining gets disconnected instead of growing this process's memory; it replays on reconnect.
+      let closeSub = () => {}
+      const out = boundedSender({
+        max: MAX_PENDING_WRITES,
+        onOverflow: () => {
+          console.warn(`[sse] dropping stalled client (user ${user._id}, >${MAX_PENDING_WRITES} unsent writes)`)
+          closeSub()
+          stream.abort()
+        },
+      })
 
       await stream.write('retry: 3000\n\n')
       const { close } = await hub.subscribe(documentId, user.groupId, lastEventId, m =>
-        void enqueue(() => stream.writeSSE({ id: m.id === undefined ? undefined : String(m.id), event: m.event, data: m.data })),
+        out.send(() => stream.writeSSE({ id: m.id === undefined ? undefined : String(m.id), event: m.event, data: m.data })),
       )
+      closeSub = close
       stream.onAbort(close)
 
       // Comment lines (": ...") are ignored by EventSource but keep idle proxies from closing the socket.
       while (!stream.aborted) {
         await stream.sleep(HEARTBEAT_MS)
-        if (!stream.aborted) void enqueue(() => stream.write(': heartbeat\n\n'))
+        if (!stream.aborted) out.send(() => stream.write(': heartbeat\n\n'))
       }
       close()
     })

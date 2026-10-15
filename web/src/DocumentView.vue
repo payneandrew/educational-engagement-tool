@@ -30,14 +30,19 @@ onMounted(async () => {
 })
 
 // Resolve every anchor against the current text: offsets if intact, quote+context if it moved, else orphaned.
+const liveRoots = computed(() => roots.value.filter(a => !a.deletedAt))
 const resolved = computed(() => {
   const text = doc.value?.text ?? ''
-  return roots.value.map(a => ({ a, r: a.anchor ? resolveAnchor(text, a.anchor) : null }))
+  return liveRoots.value.map(a => ({ a, r: a.anchor ? resolveAnchor(text, a.anchor) : null }))
 })
 const ranges = computed(() => resolved.value.filter(x => x.r).map(x => ({ id: x.a.id, start: x.r!.start, end: x.r!.end })))
 const placed = computed(() => resolved.value.filter(x => x.r).map(x => x.a).sort((a, b) => ranges.value.find(r => r.id === a.id)!.start - ranges.value.find(r => r.id === b.id)!.start))
 const orphaned = computed(() => resolved.value.filter(x => !x.r).map(x => x.a))
-const selected = computed<Annotation | null>(() => roots.value.find(a => a.id === selectedId.value) ?? null)
+// A deleted root stays reachable only while it still has replies (it's a "[deleted]" parent for them).
+const deletedThreads = computed(() => roots.value.filter(a => a.deletedAt && repliesOf(a.id).length))
+const selected = computed<Annotation | null>(
+  () => [...liveRoots.value, ...deletedThreads.value].find(a => a.id === selectedId.value) ?? null,
+)
 
 function onSelection(range: { start: number; end: number } | null) {
   pending.value = range
@@ -76,6 +81,12 @@ const createRoot = (body: string) =>
 const reply = (rootId: string, body: string) =>
   run(async () => apply(await unwrap(await client.api.annotations[':id'].replies.$post({ param: { id: rootId }, json: { body } }))))
 
+const edit = (id: string, body: string) =>
+  run(async () => apply(await unwrap(await client.api.annotations[':id'].$patch({ param: { id }, json: { body } }))))
+
+const remove = (id: string) =>
+  run(async () => apply(await unwrap(await client.api.annotations[':id'].$delete({ param: { id } }))))
+
 const upvote = (id: string) =>
   run(async () => apply(await unwrap(await client.api.annotations[':id'].upvote.$post({ param: { id } }))))
 </script>
@@ -107,6 +118,7 @@ const upvote = (id: string) =>
           :replies="selected ? repliesOf(selected.id) : []"
           :placed="placed"
           :orphaned="orphaned"
+          :deleted-threads="deletedThreads"
           :reply-count="id => repliesOf(id).length"
           :me="currentUserId"
           :busy="busy"
@@ -114,6 +126,8 @@ const upvote = (id: string) =>
           @create-root="createRoot"
           @reply="reply"
           @upvote="upvote"
+          @edit="edit"
+          @remove="remove"
           @select="select"
           @close="closePanel"
         />

@@ -35,7 +35,8 @@ Enforced on the server in two places, never on the client:
 - Writes happen in a **transaction that first increments a per-channel counter** (`channel_counters`) and stamps the result onto the annotation as `seq`. The counter doc is a write-conflict point, so writers on a channel serialize and **commit order = seq order**; an aborted write rolls back its increment, so seqs are **gapless**.
 - **One change stream** on `annotations` (with pre/post-images so each event carries the document *as of that write*) feeds an in-process `Hub` that routes to subscribers by channel. No Redis, no broker. The write path never calls "broadcast": whatever is in Mongo is what gets fanned out.
 - Each SSE event has `id: <seq>`. On reconnect the browser sends `Last-Event-ID`; the server replays `seq > N` from MongoDB. (First connect passes `?lastEventId=` from the REST snapshot, since `EventSource` can't set headers.)
-- **Self-healing:** each subscriber keeps a high-water mark. A live event must be exactly `hw+1`; anything further ahead means something was dropped, so the subscriber re-reads the gap from MongoDB. A change-stream restart triggers the same catch-up for every subscriber. Replay is **state-based** (current version of each changed post, not an event log) and clients apply by id keeping the highest `seq`, so replay, live delivery and the client's own POST response can interleave safely.
+- **Self-healing:** each subscriber keeps a high-water mark. A live event must be exactly `hw+1`; anything further ahead means something was dropped, so the subscriber re-reads the gap from MongoDB. A change-stream failure triggers a reconnect and the same catch-up for every subscriber (tested by killing the stream mid-run and writing while it's down). Replay is **state-based** (current version of each changed post, not an event log) and clients apply by id keeping the highest `seq`, so replay, live delivery and the client's own POST response can interleave safely.
+- **Backpressure:** per-client write queue is bounded; a stalled client is cut off and replays on reconnect (see below).
 - Heartbeat comment (`: heartbeat`) every 20 s (`HEARTBEAT_MS` to override). An unknown/future `Last-Event-ID` yields a `resync` event.
 
 ### Scoring
@@ -48,7 +49,7 @@ Not stored. `GET /api/instructor/documents/:id/scores` projects the document's p
 | `groups` | `{ _id, name }` | |
 | `users` | `{ _id, name, role, groupId \| null }` | Instructors have no group. |
 | `documents` | `{ _id, title, author, text, version, wordCount }` | Plain text; `version` bumps if text changes. |
-| `annotations` | `{ _id, documentId, groupId, seq, kind: 'root'\|'reply', parentId, authorId, authorName, body, anchor, docVersion, upvoterIds[], createdAt }` | See below. |
+| `annotations` | `{ _id, documentId, groupId, seq, kind: 'root'\|'reply', parentId, authorId, authorName, body, anchor, docVersion, upvoterIds[], createdAt, editedAt, deletedAt }` | See below. |
 | `channel_counters` | `{ _id: "docId:groupId", seq }` | The sequence source. |
 | `settings` | `{ _id: 'scoring', value, updatedAt }` | |
 
@@ -60,6 +61,7 @@ Modeling choices:
 - **`authorName` denormalized.** Display-only, avoids a join per thread render. Cost: a rename doesn't propagate; fine for this domain.
 - **`upvoterIds` embedded** instead of a votes collection: voters per post are small and bounded, always read with the post, and an upvote is just another mutation of the post (new `seq`), so it replicates and replays through the same machinery for free. Cost: the 16 MB doc limit (irrelevant at classroom scale) and no cheap "all votes by user" query — scoring scans posts instead.
 - **`seq` re-stamped on every mutation**, which is what makes replay a single indexed range query.
+- **Soft delete (tombstones).** Replay is "current state of everything changed after seq N", and a vanished row isn't a changed row, so a hard delete would be invisible to any client that was offline at the time. Delete is instead a normal write: new `seq`, `deletedAt` set, body and votes wiped. It broadcasts and replays like everything else. Edits work the same way (`body`, `editedAt`, new `seq`). Only the author can edit/delete; deleted posts can't be edited, voted on, or replied to, and earn no score. Deleting a root keeps its replies (shown under a "[deleted]" parent). Cost: tombstone rows live forever unless compacted (see below).
 - **Scores are not stored** (see above).
 
 ## Design decisions and tradeoffs
@@ -82,7 +84,7 @@ Traffic here is overwhelmingly server→client; writes are ordinary POSTs that a
 1. **Single process holds all connections and the one change stream.** 10k idle SSE sockets is feasible on one Node process, but not highly available, and a deploy drops everyone (they reconnect together — a thundering herd of replay queries). Scale-out means N API nodes, each running its own change stream (every node sees every write) and routing to its local subscribers. That multiplies change-stream load on MongoDB by N; the fix is a dedicated fan-out tier or partitioning channels across nodes.
 2. **Channel counter hot spot.** Every write on a document×group takes a transaction on one counter doc, serializing that channel. Fine for a class of 30; a 10k-person live lecture in one channel would conflict and retry constantly. Fix: shard channels smaller (groups already do this), or drop transactions for an ordering scheme from the oplog (e.g. use the change stream's cluster time).
 3. **Reconnect storms.** Replay hits Mongo (`{documentId, groupId, seq}` index — cheap, but 10k at once is not). Add jitter to `retry`, and cap replay size by falling back to a fresh snapshot.
-4. **Slow consumers.** Sends are queued per connection without backpressure limits; a stalled client buffers unboundedly in memory. Needs a per-subscriber queue cap that disconnects (the client then replays).
+4. **Slow consumers (handled, with limits).** Each client's writes go through a bounded queue (`realtime/bounded-sender.ts`, `SSE_MAX_PENDING`, default 500). A client that stops reading is disconnected instead of growing memory; it reconnects and replays from MongoDB. What's still missing: the bound counts *writes*, not bytes, so large events fill memory faster than small ones; there's no global cap on total connections or total queued bytes; and a mass-stall (e.g. a proxy hiccup) turns into a reconnect storm, which is item 3.
 5. **Scoring on read.** Scans all posts of a document per instructor request. Fine at hundreds of posts; at scale, keep incremental per-user rollups updated from the change stream (the raw posts remain the source of truth, so a config change triggers a rebuild).
 6. **Dev `mongodb-memory-server`** is a dev convenience only; production needs a real replica set. Change-stream post-images also need MongoDB ≥ 6.0 and add oplog/storage overhead.
 7. No auth, rate limiting, or deletion/edit support (deletes would need tombstones so replay can express them).
@@ -99,4 +101,4 @@ e2e/          Playwright two-user test
 ```
 
 ## Tests
-`npm test`: anchoring (re-anchoring, ambiguity, orphaning), scoring (re-scoring on config change, caps), and integration tests against a real throwaway MongoDB replica set covering gapless seqs under concurrent writers, group-isolated fan-out, `Last-Event-ID` replay, upvote replay, and healing from a dropped broadcast.
+`npm test`: anchoring (re-anchoring, ambiguity, orphaning), scoring (re-scoring on config change, caps), and integration tests against a real throwaway MongoDB replica set covering gapless seqs under concurrent writers, group-isolated fan-out, `Last-Event-ID` replay, upvote replay, healing from a dropped broadcast, edit/delete (live broadcast, author-only, tombstone replay to an offline client, deleted posts inert, no score for deleted posts), and recovery after the change stream is killed with writes landing during the outage. A real-TCP test opens a stream that never reads and asserts the server drops it while a healthy client on the same channel keeps receiving every event, and that the dropped client can replay everything from MongoDB.

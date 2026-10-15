@@ -8,11 +8,19 @@ import { channelKey } from './channel'
 export type Student = UserDoc & { groupId: string }
 
 /** Wire shape for REST and SSE. Inferred types flow from here to the Vue app via Hono RPC. */
-export type AnnotationDTO = Omit<AnnotationDoc, '_id' | 'createdAt'> & { id: string; createdAt: string }
+export type AnnotationDTO = Omit<AnnotationDoc, '_id' | 'createdAt' | 'editedAt' | 'deletedAt'> & {
+  id: string
+  createdAt: string
+  editedAt: string | null
+  deletedAt: string | null
+}
 
-export const toDTO = ({ _id, createdAt, ...rest }: AnnotationDoc): AnnotationDTO => ({
+export const toDTO = ({ _id, createdAt, editedAt, deletedAt, ...rest }: AnnotationDoc): AnnotationDTO => ({
   id: _id,
   createdAt: createdAt.toISOString(),
+  // `?.` / `?? null`: documents written before these fields existed don't have them.
+  editedAt: editedAt?.toISOString() ?? null,
+  deletedAt: deletedAt?.toISOString() ?? null,
   ...rest,
 })
 
@@ -72,6 +80,8 @@ export async function createRoot(user: Student, documentId: string, input: { anc
       docVersion: doc.version,
       upvoterIds: [],
       createdAt: new Date(),
+      editedAt: null,
+      deletedAt: null,
     }
     await annotations.insertOne(a, { session })
     return a
@@ -81,7 +91,7 @@ export async function createRoot(user: Student, documentId: string, input: { anc
 export async function createReply(user: Student, parentId: string, body: string) {
   const parent = await annotations.findOne({ _id: parentId })
   // Same 404 for "doesn't exist" and "other group's": don't leak existence across groups.
-  if (!parent || parent.groupId !== user.groupId) throw new AppError(404, 'annotation not found')
+  if (!parent || parent.groupId !== user.groupId || parent.deletedAt) throw new AppError(404, 'annotation not found')
   if (parent.kind !== 'root') throw new AppError(400, 'can only reply to a top-level annotation')
 
   return withNextSeq(parent.documentId, user.groupId, async (seq, session) => {
@@ -99,6 +109,8 @@ export async function createReply(user: Student, parentId: string, body: string)
       docVersion: parent.docVersion,
       upvoterIds: [],
       createdAt: new Date(),
+      editedAt: null,
+      deletedAt: null,
     }
     await annotations.insertOne(a, { session })
     return a
@@ -108,12 +120,13 @@ export async function createReply(user: Student, parentId: string, body: string)
 /** Toggle. An upvote is a mutation of the post, so it takes a fresh seq and is broadcast/replayed like any write. */
 export async function toggleUpvote(user: Student, annotationId: string) {
   const target = await annotations.findOne({ _id: annotationId })
-  if (!target || target.groupId !== user.groupId) throw new AppError(404, 'annotation not found')
+  if (!target || target.groupId !== user.groupId || target.deletedAt) throw new AppError(404, 'annotation not found')
   if (target.authorId === user._id) throw new AppError(400, "can't upvote your own post")
 
   return withNextSeq(target.documentId, target.groupId, async (seq, session) => {
     // Re-read inside the transaction: the counter lock means no other writer on this channel interleaves.
     const current = await annotations.findOne({ _id: annotationId }, { session })
+    if (current!.deletedAt) throw new AppError(404, 'annotation not found') // deleted since we looked
     const has = current!.upvoterIds.includes(user._id)
     const updated = await annotations.findOneAndUpdate(
       { _id: annotationId },
@@ -121,6 +134,47 @@ export async function toggleUpvote(user: Student, annotationId: string) {
       { returnDocument: 'after', session },
     )
     return updated!
+  })
+}
+
+/** Shared preconditions for edit/delete: visible to this user's group, not already deleted, and theirs. */
+async function loadOwn(user: Student, id: string) {
+  const t = await annotations.findOne({ _id: id })
+  if (!t || t.groupId !== user.groupId || t.deletedAt) throw new AppError(404, 'annotation not found')
+  if (t.authorId !== user._id) throw new AppError(403, 'only the author can change this post')
+  return t
+}
+
+/** Edits take a fresh seq like any write, so they broadcast live and replay on reconnect. */
+export async function editAnnotation(user: Student, id: string, body: string) {
+  const t = await loadOwn(user, id)
+  return withNextSeq(t.documentId, t.groupId, async (seq, session) => {
+    // The `deletedAt: null` filter makes a concurrent delete win; our txn (and its seq bump) then aborts.
+    const updated = await annotations.findOneAndUpdate(
+      { _id: id, deletedAt: null },
+      { $set: { body, seq, editedAt: new Date() } },
+      { returnDocument: 'after', session },
+    )
+    if (!updated) throw new AppError(404, 'annotation not found')
+    return updated
+  })
+}
+
+/**
+ * Tombstone, not removal (see AnnotationDoc.deletedAt). The body and votes are wiped so the content is
+ * really gone; the row stays so every client, including ones offline right now, converges on "deleted".
+ * Deleting a root leaves its replies alone: they remain readable under a "[deleted]" parent.
+ */
+export async function deleteAnnotation(user: Student, id: string) {
+  const t = await loadOwn(user, id)
+  return withNextSeq(t.documentId, t.groupId, async (seq, session) => {
+    const updated = await annotations.findOneAndUpdate(
+      { _id: id, deletedAt: null },
+      { $set: { body: '', upvoterIds: [], seq, deletedAt: new Date() } },
+      { returnDocument: 'after', session },
+    )
+    if (!updated) throw new AppError(404, 'annotation not found')
+    return updated
   })
 }
 

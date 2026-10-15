@@ -28,6 +28,7 @@ const body = z.string().trim().min(1).max(5000)
 
 export const createAnnotationBody = z.object({ anchor: anchorSchema, body })
 export const createReplyBody = z.object({ body })
+export const editBody = z.object({ body })
 
 export const streamQuery = z.object({
   // EventSource can't set headers on the FIRST connect, so the client passes its snapshot seq here.

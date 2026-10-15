@@ -129,3 +129,106 @@ describe('replay + self-healing', () => {
     s.close()
   })
 })
+
+describe('change stream restart', () => {
+  it('converges after the stream dies and writes happen while it is down', async () => {
+    const got: SseMessage[] = []
+    const s = await m.hub.hub.subscribe(DOC, 'g-a', undefined, e => got.push(e))
+    const live = await post(alice, 'delivered over the live stream')
+    await waitFor(() => got.some(e => e.id === live.seq))
+
+    // Kill the change stream out from under the hub (what a network blip or failover looks like).
+    await (m.hub.hub as unknown as { stream: { close(): Promise<void> } }).stream.close()
+    // Writes during the outage never reach the (dead) stream; they exist only in MongoDB.
+    const missed = [await post(bob, 'written while down 1'), await post(alice, 'written while down 2'), await post(bob, 'written while down 3')]
+
+    // The hub reconnects and runs catch-up for every subscriber, sourcing the gap from MongoDB.
+    await waitFor(() => missed.every(r => got.some(e => e.id === r.seq)), 10_000)
+
+    // The recovered stream is live again, too.
+    const after = await post(alice, 'after recovery')
+    await waitFor(() => got.some(e => e.id === after.seq))
+
+    const ids = got.map(e => e.id!)
+    expect(ids).toEqual([...new Set(ids)]) // no duplicates
+    expect(ids).toEqual([...ids].sort((a, b) => a - b)) // still in order
+    expect(ids.slice(-5)).toEqual([live.seq, ...missed.map(r => r.seq), after.seq])
+    s.close()
+  }, 20_000)
+})
+
+describe('edit + delete', () => {
+  it('broadcasts an edit live and replays it, at a new seq', async () => {
+    const root = await post(alice, 'original wording of the comment')
+    const mark = await m.svc.currentSeq(DOC, 'g-a')
+    const got: SseMessage[] = []
+    const live = await m.hub.hub.subscribe(DOC, 'g-a', undefined, e => got.push(e))
+
+    const edited = await m.svc.editAnnotation(alice, root._id, 'revised wording of the comment')
+    await waitFor(() => got.length === 1)
+    expect(JSON.parse(got[0].data)).toMatchObject({ id: root._id, body: 'revised wording of the comment', seq: mark + 1 })
+    expect(JSON.parse(got[0].data).editedAt).not.toBeNull()
+    expect(edited.seq).toBe(mark + 1)
+    live.close()
+
+    const replayed: SseMessage[] = []
+    const re = await m.hub.hub.subscribe(DOC, 'g-a', mark, e => replayed.push(e))
+    expect(replayed.map(e => JSON.parse(e.data).body)).toEqual(['revised wording of the comment'])
+    re.close()
+  })
+
+  it('only the author may edit or delete; other groups cannot even see the post', async () => {
+    const root = await post(alice)
+    const seq = await m.svc.currentSeq(DOC, 'g-a')
+    await expect(m.svc.editAnnotation(bob, root._id, 'hijack')).rejects.toMatchObject({ status: 403 })
+    await expect(m.svc.deleteAnnotation(bob, root._id)).rejects.toMatchObject({ status: 403 })
+    await expect(m.svc.deleteAnnotation(carol, root._id)).rejects.toMatchObject({ status: 404 })
+    expect(await m.svc.currentSeq(DOC, 'g-a')).toBe(seq) // rejected writes burn no sequence numbers
+    expect((await m.db.annotations.findOne({ _id: root._id }))!.body).toBe('a perfectly substantive comment')
+  })
+
+  it('a client that was offline during a delete still learns of it on reconnect (tombstone replay)', async () => {
+    const root = await post(alice, 'this one will be deleted')
+    await m.svc.toggleUpvote(bob, root._id) // so we can see the vote get wiped
+    const mark = await m.svc.currentSeq(DOC, 'g-a') // the offline client last saw this
+    const t = await m.svc.deleteAnnotation(alice, root._id)
+
+    expect((await m.db.annotations.findOne({ _id: root._id }))!.upvoterIds).toEqual([])
+    expect(t).toMatchObject({ body: '', upvoterIds: [], seq: mark + 1 })
+    expect(t.deletedAt).toBeInstanceOf(Date)
+
+    const replayed: SseMessage[] = []
+    const re = await m.hub.hub.subscribe(DOC, 'g-a', mark, e => replayed.push(e))
+    expect(replayed).toHaveLength(1)
+    expect(JSON.parse(replayed[0].data)).toMatchObject({ id: root._id, body: '', upvoterIds: [] })
+    expect(JSON.parse(replayed[0].data).deletedAt).not.toBeNull()
+    re.close()
+  })
+
+  it('deleted posts are inert: no edit, vote or reply, and double-delete is a 404', async () => {
+    const root = await post(alice)
+    await m.svc.deleteAnnotation(alice, root._id)
+    await expect(m.svc.editAnnotation(alice, root._id, 'zombie')).rejects.toMatchObject({ status: 404 })
+    await expect(m.svc.toggleUpvote(bob, root._id)).rejects.toMatchObject({ status: 404 })
+    await expect(m.svc.createReply(bob, root._id, 'anyone there?')).rejects.toMatchObject({ status: 404 })
+    await expect(m.svc.deleteAnnotation(alice, root._id)).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('deleting a root keeps its replies', async () => {
+    const root = await post(alice)
+    const reply = await m.svc.createReply(bob, root._id, 'a reply that should survive its parent')
+    await m.svc.deleteAnnotation(alice, root._id)
+    const snap = await m.svc.snapshot(DOC, 'g-a')
+    expect(snap.annotations.find(a => a.id === reply._id)).toMatchObject({ body: 'a reply that should survive its parent', deletedAt: null })
+  })
+
+  it("deleting a post removes its points: it can't be used to bank score", async () => {
+    const { scoresForDocument } = await import('./services/scores')
+    const score = async () => (await scoresForDocument(DOC)).rows.find(r => r.userId === 'u-alice')!.comments
+    const before = await score()
+    const root = await post(alice, 'a comment long enough to count')
+    expect(await score()).toBe(before + 1)
+    await m.svc.deleteAnnotation(alice, root._id)
+    expect(await score()).toBe(before)
+  })
+})

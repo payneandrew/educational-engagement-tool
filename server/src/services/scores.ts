@@ -18,7 +18,8 @@ export async function scoresForDocument(documentId: string) {
     getScoringConfig(),
     annotations
       .aggregate<ActivityRecord>([
-        { $match: { documentId } },
+        // Deleted posts earn nothing (and votes on them are gone), so deleting can't be used to bank points.
+        { $match: { documentId, deletedAt: null } },
         { $project: { _id: 0, authorId: 1, kind: 1, upvoterIds: 1, bodyLength: { $strLenCP: '$body' } } },
       ])
       .toArray(),

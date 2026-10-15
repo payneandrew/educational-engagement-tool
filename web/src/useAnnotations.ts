@@ -54,8 +54,9 @@ export function useAnnotations(documentId: string) {
 
   const all = computed(() => Object.values(byId))
   const roots = computed(() => all.value.filter(a => a.kind === 'root'))
+  // Deleted replies are tombstones kept for sync; they are simply not shown.
   const repliesOf = (rootId: string) =>
-    all.value.filter(a => a.parentId === rootId).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    all.value.filter(a => a.parentId === rootId && !a.deletedAt).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 
   return { load, apply, roots, repliesOf, byId, connected }
 }
