@@ -1,0 +1,11 @@
+node_modules
+dist
+# Dev MongoDB data (mongodb-memory-server)
+.data
+# Playwright output
+test-results
+playwright-report
+.env
+.env.*
+.DS_Store
+*.log

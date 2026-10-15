@@ -1,0 +1,41 @@
+{
+  "name": "educational-engagement-tool",
+  "version": "0.1.0",
+  "description": "Marginalia: a small social annotation app (Vue 3, Hono RPC, MongoDB change streams, SSE)",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n db,api,web -c gray,cyan,green \"npm:dev:db\" \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:db": "tsx scripts/dev-db.ts",
+    "dev:api": "wait-on tcp:27018 && tsx watch server/src/index.ts",
+    "dev:web": "vite",
+    "seed": "tsx server/src/seed.ts",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "@hono/zod-validator": "^0.9.1",
+    "hono": "^4.13.13",
+    "mongodb": "^7.7.0",
+    "vue": "^3.5.44",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.5",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "concurrently": "^10.0.6",
+    "mongodb-memory-server": "^11.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5",
+    "vue-tsc": "^3.3.13",
+    "wait-on": "^9.5.1"
+  }
+}
