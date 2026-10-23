@@ -11,7 +11,7 @@ npm install
 npm run dev        # MongoDB + API (:3001) + web (:5173), seeded on first run
 ```
 
-Open http://localhost:5173. Use the **Viewing as** dropdown to switch between seeded users (Alice, Bob, Carol are students; Dana is the instructor). `sessionStorage` holds the choice, so **two browser tabs can be two different users** — open Alice and Bob side by side to watch annotations appear live. Students can post, reply, and edit/delete their own annotations; the instructor reads every discussion.
+Open http://localhost:5173. Use the **Viewing as** dropdown to switch between seeded users (Alice, Bob, Carol are students; Dana is the instructor). `sessionStorage` holds the choice, so **two browser tabs can be two different users** — open Alice and Bob side by side to watch annotations appear live. As Dana, use **New reading** to assign a reading (title + description). Students can post, reply, and edit/delete their own annotations; the instructor reads every discussion.
 
 `npm run dev` starts a persistent single-node MongoDB **replica set** (via `mongodb-memory-server`, data in `.data/`, port 27018). A replica set is required for change streams and transactions. To use your own cluster, set `MONGO_URI` (and run `dev:api` / `dev:web` only). `npm run seed` resets the data to the sample readings and annotations; `npm test` runs the tests; `npm run typecheck` checks server + web together.
 
@@ -27,7 +27,7 @@ Vue (hc<AppType>) ──REST──▶ Hono ──txn: bump document seq + write�
 `server/src/app.ts` defines every route as **one chained expression** and exports `AppType`. `web/src/api.ts` does `hc<AppType>(location.origin)`; the `Annotation` response type is derived with `InferResponseType`. No codegen, no API types written by hand on the client. `validate()` (in `schemas.ts`) wraps `zValidator` with a failure hook so 400s are a clean `{ error }` rather than leaking zod's raw result type into every response union.
 
 ### Roles
-No real auth: the client sends the selected user id (`x-user-id`) and the server looks the user up. Reads (readings, annotations, the live stream) are open to any user; writes are student-only (403 for instructors). Edit/delete are author-only (403 otherwise).
+No real auth: the client sends the selected user id (`x-user-id`) and the server looks the user up. Reads (readings, annotations, the live stream) are open to any user. Creating a reading (`POST /api/readings`) is instructor-only; posting annotations is student-only (403 otherwise). Edit/delete are author-only.
 
 ### Real-time (SSE)
 - Writes happen in a **transaction that first increments a per-document counter** (`channel_counters`) and stamps the result onto the annotation as `seq`. The counter doc is a write-conflict point, so writers on a document serialize and **commit order = seq order**; an aborted write rolls back its increment, so seqs are **gapless**.
@@ -42,7 +42,7 @@ No real auth: the client sends the selected user id (`x-user-id`) and the server
 | Collection | Shape | Notes |
 |---|---|---|
 | `users` | `{ _id, name, role }` | `role` is `'student' \| 'instructor'`. |
-| `documents` | `{ _id, title, author, text, wordCount }` | The readings. |
+| `documents` | `{ _id, title, description, createdBy, createdAt }` | The readings. `createdBy` is the instructor's user id; listed newest first. |
 | `annotations` | `{ _id, documentId, seq, kind: 'root'\|'reply', parentId, authorId, authorName, body, createdAt, editedAt, deletedAt }` | See below. |
 | `channel_counters` | `{ _id: documentId, seq }` | The sequence source. |
 
@@ -71,9 +71,10 @@ Traffic here is overwhelmingly server→client; writes are ordinary POSTs that a
 ```
 server/src/   Hono app (app.ts), services/, realtime/hub.ts, seed
 web/src/      Vue app: reading list, reading page + discussion feed, typed hc client
-seed-data/    public-domain texts (Project Gutenberg)
-scripts/      dev MongoDB launcher, one-off seed text prep
+scripts/      dev MongoDB launcher
 ```
 
 ## Tests
 `npm test`: integration tests against a real throwaway MongoDB replica set covering gapless seqs under concurrent writers, per-document fan-out, `Last-Event-ID` replay, healing from a dropped broadcast, empty-annotation validation, edit/delete (live broadcast, author-only, tombstone replay to an offline client, deleted posts inert, replies survive a deleted root), and recovery after the change stream is killed with writes landing during the outage. A real-TCP test opens a stream that never reads and asserts the server drops it while a healthy client on the same document keeps receiving every event, and that the dropped client can replay everything from MongoDB.
+
+`server/src/readings.test.ts` drives `POST /api/readings` through `app.request`: instructors can create (trimmed, listed first), students get 403, unknown users 401, and blank title/description 400.

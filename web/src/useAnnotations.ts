@@ -7,7 +7,8 @@ import { currentUserId } from './session'
  */
 export function useAnnotations(documentId: string) {
   const byId = reactive<Record<string, Annotation>>({})
-  const connected = ref(false)
+  /** True only after an established stream drops, so the first connect doesn't flash a warning. */
+  const connectionLost = ref(false)
   let lastSeq = 0
   let es: EventSource | undefined
   let retryTimer: ReturnType<typeof setTimeout> | undefined
@@ -22,7 +23,7 @@ export function useAnnotations(documentId: string) {
 
   async function load() {
     es?.close()
-    const snap = await unwrap(await client.api.documents[':id'].annotations.$get({ param: { id: documentId } }))
+    const snap = await unwrap(await client.api.readings[':id'].annotations.$get({ param: { id: documentId } }))
     for (const k of Object.keys(byId)) delete byId[k]
     snap.annotations.forEach(apply)
     lastSeq = snap.seq // counter was read before the list, so everything after this seq replays
@@ -32,14 +33,14 @@ export function useAnnotations(documentId: string) {
   function connect() {
     if (disposed) return
     // The hc client builds the URL (typed path + query); EventSource can't send headers, hence ?uid=.
-    const url = client.api.documents[':id'].stream.$url({ param: { id: documentId }, query: { lastEventId: String(lastSeq) } })
+    const url = client.api.readings[':id'].stream.$url({ param: { id: documentId }, query: { lastEventId: String(lastSeq) } })
     url.searchParams.set('uid', currentUserId.value)
     es = new EventSource(url)
-    es.onopen = () => (connected.value = true)
+    es.onopen = () => (connectionLost.value = false)
     es.addEventListener('annotation', e => apply(JSON.parse((e as MessageEvent).data)))
     es.addEventListener('resync', () => void load()) // server says our position is invalid
     es.onerror = () => {
-      connected.value = false
+      connectionLost.value = true
       // While CONNECTING the browser retries by itself and sends Last-Event-ID. If it gave up (CLOSED), start over.
       if (es?.readyState === EventSource.CLOSED) retryTimer = setTimeout(() => void load().catch(() => {}), 3000)
     }
@@ -62,5 +63,5 @@ export function useAnnotations(documentId: string) {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   )
 
-  return { load, apply, roots, repliesOf, connected }
+  return { load, apply, roots, repliesOf, connectionLost }
 }

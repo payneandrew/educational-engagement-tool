@@ -1,22 +1,22 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { client, unwrap, type Annotation, type FeedActions } from './api'
+import { client, unwrap, type Annotation, type FeedActions, type Reading } from './api'
 import AnnotationFeed from './AnnotationFeed.vue'
 import { currentUserId } from './session'
 import { useAnnotations } from './useAnnotations'
 
-const props = defineProps<{ documentId: string; canPost: boolean }>()
+const props = defineProps<{ documentId: string; canPost: boolean; nameOf: (userId: string) => string }>()
 
-const doc = ref<{ id: string; title: string; author: string; text: string } | null>(null)
+const doc = ref<Reading | null>(null)
 const loadError = ref('')
-const { load, apply, roots, repliesOf, connected } = useAnnotations(props.documentId)
+const { load, apply, roots, repliesOf, connectionLost } = useAnnotations(props.documentId)
 
 const busy = ref(false)
 const error = ref('')
 
 onMounted(async () => {
   try {
-    doc.value = await unwrap(await client.api.documents[':id'].$get({ param: { id: props.documentId } }))
+    doc.value = await unwrap(await client.api.readings[':id'].$get({ param: { id: props.documentId } }))
     await load()
   } catch (e) {
     loadError.value = (e as Error).message
@@ -43,7 +43,7 @@ async function run(fn: () => Promise<Annotation>) {
 
 const actions: FeedActions = {
   create: (body: string) =>
-    run(async () => unwrap(await client.api.documents[':id'].annotations.$post({ param: { id: props.documentId }, json: { body } }))),
+    run(async () => unwrap(await client.api.readings[':id'].annotations.$post({ param: { id: props.documentId }, json: { body } }))),
   reply: (rootId: string, body: string) =>
     run(async () => unwrap(await client.api.annotations[':id'].replies.$post({ param: { id: rootId }, json: { body } }))),
   edit: (id: string, body: string) => run(async () => unwrap(await client.api.annotations[':id'].$patch({ param: { id }, json: { body } }))),
@@ -52,29 +52,27 @@ const actions: FeedActions = {
 </script>
 
 <template>
-  <div class="page">
+  <div class="page narrow">
+    <a href="#">← All readings</a>
     <p v-if="loadError" class="err">{{ loadError }}</p>
     <template v-if="doc">
-      <div class="row">
-        <div class="spacer">
-          <a href="#">← All readings</a>
-          <h2 style="margin: 4px 0 0">{{ doc.title }}</h2>
-          <small>{{ doc.author }}</small>
-        </div>
-        <span class="status" :class="{ on: connected }">{{ connected ? 'live' : 'reconnecting…' }}</span>
-      </div>
-      <div class="doc-layout" style="margin-top: 16px">
-        <article class="reader">{{ doc.text }}</article>
-        <AnnotationFeed
-          :roots="roots"
-          :replies-of="repliesOf"
-          :me="currentUserId"
-          :can-post="canPost"
-          :busy="busy"
-          :error="error"
-          :actions="actions"
-        />
-      </div>
+      <article class="card reading">
+        <h2>{{ doc.title }}</h2>
+        <small>Assigned by {{ nameOf(doc.createdBy) }} · {{ new Date(doc.createdAt).toLocaleDateString([], { dateStyle: 'medium' }) }}</small>
+        <p>{{ doc.description }}</p>
+      </article>
+      <p v-if="connectionLost" class="notice" role="status">
+        Connection lost — reconnecting. New annotations may be delayed.
+      </p>
+      <AnnotationFeed
+        :roots="roots"
+        :replies-of="repliesOf"
+        :me="currentUserId"
+        :can-post="canPost"
+        :busy="busy"
+        :error="error"
+        :actions="actions"
+      />
     </template>
   </div>
 </template>

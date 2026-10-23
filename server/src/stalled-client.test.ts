@@ -25,7 +25,7 @@ const waitFor = async (pred: () => boolean, ms: number) => {
 function openRawStream(userId: string, { read }: { read: boolean }) {
   const sock = net.connect(port, '127.0.0.1')
   const state = { events: 0, closed: false }
-  sock.write(`GET /api/documents/${DOC}/stream HTTP/1.1\r\nHost: x\r\nx-user-id: ${userId}\r\n\r\n`)
+  sock.write(`GET /api/readings/${DOC}/stream HTTP/1.1\r\nHost: x\r\nx-user-id: ${userId}\r\n\r\n`)
   sock.on('close', () => (state.closed = true))
   sock.on('error', () => {})
   if (read) sock.on('data', d => (state.events += d.toString().split('event: annotation').length - 1))

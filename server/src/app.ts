@@ -2,13 +2,14 @@ import { Hono } from 'hono'
 import { createMiddleware } from 'hono/factory'
 import { HTTPException } from 'hono/http-exception'
 import { streamSSE } from 'hono/streaming'
-import { documents, users } from './db'
+import { users } from './db'
 import type { UserDoc } from './models'
 import { boundedSender } from './realtime/bounded-sender'
 import { hub } from './realtime/hub'
-import { bodySchema, idParam, streamQuery, validate } from './schemas'
+import { bodySchema, idParam, readingSchema, streamQuery, validate } from './schemas'
 import { createReply, createRoot, deleteAnnotation, editAnnotation, snapshot, toDTO } from './services/annotations'
 import { AppError } from './services/errors'
+import { createReading, getReading, listReadings } from './services/readings'
 
 type Env = { Variables: { user: UserDoc } }
 
@@ -23,6 +24,11 @@ const auth = createMiddleware<Env>(async (c, next) => {
   const user = uid ? await users.findOne({ _id: uid }) : null
   if (!user) throw new HTTPException(401, { message: 'unknown user' })
   c.set('user', user)
+  await next()
+})
+
+const instructorOnly = createMiddleware<Env>(async (c, next) => {
+  if (c.get('user').role !== 'instructor') throw new HTTPException(403, { message: 'only instructors can create readings' })
   await next()
 })
 
@@ -46,7 +52,7 @@ export const app = new Hono<Env>()
     console.error(err)
     return c.json({ error: 'internal error' }, 500)
   })
-  .use('/documents/*', auth)
+  .use('/readings/*', auth)
   .use('/annotations/*', auth)
 
   .get('/health', c => c.json({ ok: true, subscribers: hub.subscriberCount }))
@@ -54,21 +60,17 @@ export const app = new Hono<Env>()
   // Seeded identities for the user-switcher (stand-in for login).
   .get('/users', async c => c.json(await users.find().sort({ _id: 1 }).toArray()))
 
-  .get('/documents', async c => {
-    const list = await documents.find({}, { projection: { text: 0 } }).sort({ _id: 1 }).toArray()
-    return c.json(list.map(({ _id, ...d }) => ({ id: _id, ...d })))
-  })
+  .get('/readings', async c => c.json(await listReadings()))
 
-  .get('/documents/:id', validate('param', idParam), async c => {
-    const d = await documents.findOne({ _id: c.req.valid('param').id })
-    if (!d) throw new AppError(404, 'document not found')
-    const { _id, ...rest } = d
-    return c.json({ id: _id, ...rest })
-  })
+  .post('/readings', instructorOnly, validate('json', readingSchema), async c =>
+    c.json(await createReading(c.get('user'), c.req.valid('json')), 201),
+  )
 
-  .get('/documents/:id/annotations', validate('param', idParam), async c => c.json(await snapshot(c.req.valid('param').id)))
+  .get('/readings/:id', validate('param', idParam), async c => c.json(await getReading(c.req.valid('param').id)))
 
-  .post('/documents/:id/annotations', validate('param', idParam), validate('json', bodySchema), async c => {
+  .get('/readings/:id/annotations', validate('param', idParam), async c => c.json(await snapshot(c.req.valid('param').id)))
+
+  .post('/readings/:id/annotations', validate('param', idParam), validate('json', bodySchema), async c => {
     const user = asStudent(c.get('user'))
     const created = await createRoot(user, c.req.valid('param').id, c.req.valid('json').body)
     // Persisted; the change stream fans it out. No broadcast call here, so there's no
@@ -92,7 +94,7 @@ export const app = new Hono<Env>()
     return c.json(toDTO(await deleteAnnotation(user, c.req.valid('param').id)))
   })
 
-  .get('/documents/:id/stream', validate('param', idParam), validate('query', streamQuery), c => {
+  .get('/readings/:id/stream', validate('param', idParam), validate('query', streamQuery), c => {
     const user = c.get('user')
     const documentId = c.req.valid('param').id
     const header = Number.parseInt(c.req.header('Last-Event-ID') ?? '', 10)

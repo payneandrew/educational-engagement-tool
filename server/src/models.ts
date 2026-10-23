@@ -4,12 +4,14 @@ export interface UserDoc {
   role: 'student' | 'instructor'
 }
 
+/** A reading an instructor has assigned. */
 export interface DocumentDoc {
   _id: string
   title: string
-  author: string
-  text: string
-  wordCount: number
+  description: string
+  /** The instructor's user id. */
+  createdBy: string
+  createdAt: Date
 }
 
 /**

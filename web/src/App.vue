@@ -2,22 +2,22 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { client, unwrap } from './api'
 import DocumentView from './DocumentView.vue'
+import ReadingList from './ReadingList.vue'
 import { currentUserId } from './session'
 
 type UserRow = { _id: string; name: string; role: 'student' | 'instructor' }
 const users = ref<UserRow[]>([])
-const docs = ref<{ id: string; title: string; author: string; wordCount: number }[]>([])
 const hash = ref(location.hash)
 const onHash = () => (hash.value = location.hash)
 
 const me = computed(() => users.value.find(u => u._id === currentUserId.value))
 const docId = computed(() => /^#\/doc\/(.+)$/.exec(hash.value)?.[1] ?? null)
+const nameOf = (id: string) => users.value.find(u => u._id === id)?.name ?? 'Unknown'
 
 onMounted(async () => {
   window.addEventListener('hashchange', onHash)
   users.value = await unwrap(await client.api.users.$get())
   if (!users.value.some(u => u._id === currentUserId.value)) currentUserId.value = users.value[0]._id
-  docs.value = await unwrap(await client.api.documents.$get())
 })
 onUnmounted(() => window.removeEventListener('hashchange', onHash))
 </script>
@@ -34,15 +34,8 @@ onUnmounted(() => window.removeEventListener('hashchange', onHash))
   </header>
 
   <template v-if="me">
-    <!-- :key on the user remounts the reader, which re-fetches the snapshot and reopens the stream as the new user -->
-    <DocumentView v-if="docId" :key="`${me._id}:${docId}`" :document-id="docId" :can-post="me.role === 'student'" />
-    <div v-else class="page">
-      <h2>Readings</h2>
-      <ul class="doc-list">
-        <li v-for="d in docs" :key="d.id">
-          <a :href="`#/doc/${d.id}`"><strong>{{ d.title }}</strong><br /><small>{{ d.author }} · {{ d.wordCount.toLocaleString() }} words</small></a>
-        </li>
-      </ul>
-    </div>
+    <!-- :key on the user remounts the page, which re-fetches and (for a reading) reopens the stream as the new user -->
+    <DocumentView v-if="docId" :key="`${me._id}:${docId}`" :document-id="docId" :can-post="me.role === 'student'" :name-of="nameOf" />
+    <ReadingList v-else :key="me._id" :can-create="me.role === 'instructor'" :name-of="nameOf" />
   </template>
 </template>

@@ -34,7 +34,7 @@ async function sendReply(rootId: string) {
 </script>
 
 <template>
-  <aside class="side">
+  <section class="discussion">
     <h3>Discussion ({{ total }})</h3>
 
     <form v-if="canPost" class="composer" @submit.prevent="post">
@@ -65,5 +65,5 @@ async function sendReply(rootId: string) {
         <button v-else class="link" @click="startReply(root.id)">Reply</button>
       </template>
     </div>
-  </aside>
+  </section>
 </template>
