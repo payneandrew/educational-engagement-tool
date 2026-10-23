@@ -14,34 +14,11 @@ export const validate = <T extends z.ZodType, Target extends keyof ValidationTar
 
 export const idParam = z.object({ id: z.string().min(1).max(64) })
 
-export const anchorSchema = z
-  .object({
-    start: z.number().int().min(0),
-    end: z.number().int().min(1),
-    exact: z.string().min(1).max(2000),
-    prefix: z.string().max(64),
-    suffix: z.string().max(64),
-  })
-  .refine(a => a.end > a.start && a.end - a.start === a.exact.length, 'range must match quoted text length')
-
-const body = z.string().trim().min(1).max(5000)
-
-export const createAnnotationBody = z.object({ anchor: anchorSchema, body })
-export const createReplyBody = z.object({ body })
-export const editBody = z.object({ body })
+/** Trimmed first, so whitespace-only annotations are rejected as empty. */
+export const bodySchema = z.object({ body: z.string().trim().min(1, 'annotation cannot be empty').max(5000) })
 
 export const streamQuery = z.object({
   // EventSource can't set headers on the FIRST connect, so the client passes its snapshot seq here.
   // On automatic reconnects the browser sends the Last-Event-ID header instead, which wins.
   lastEventId: z.coerce.number().int().min(0).optional(),
-})
-
-const pts = z.number().min(0).max(100)
-export const scoringConfigSchema = z.object({
-  commentPoints: pts,
-  replyPoints: pts,
-  upvoteReceivedPoints: pts,
-  upvoteGivenPoints: pts,
-  minChars: z.number().int().min(0).max(1000),
-  maxUpvotesPerPost: z.number().int().min(0).max(1000),
 })

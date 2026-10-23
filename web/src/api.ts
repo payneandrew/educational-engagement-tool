@@ -13,7 +13,14 @@ type Ok<T> = Exclude<T, { error: string }>
 
 // Response types are *inferred* from the client, not declared.
 export type Annotation = Ok<InferResponseType<(typeof client.api.documents)[':id']['annotations']['$get']>>['annotations'][number]
-export type ScoreRow = Ok<InferResponseType<(typeof client.api.instructor.documents)[':id']['scores']['$get']>>['rows'][number]
+
+/** Mutations the discussion UI can trigger. Each resolves true on success, so the caller knows to clear its draft. */
+export interface FeedActions {
+  create(body: string): Promise<boolean>
+  reply(rootId: string, body: string): Promise<boolean>
+  edit(id: string, body: string): Promise<boolean>
+  remove(id: string): Promise<boolean>
+}
 
 /** Unwraps a Response, throwing the server's `{ error }` message on non-2xx. */
 export async function unwrap<R extends { ok: boolean; status: number; json(): Promise<any> }>(

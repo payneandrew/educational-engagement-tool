@@ -12,5 +12,5 @@
     "jsx": "preserve",
     "verbatimModuleSyntax": true
   },
-  "include": ["e2e", "playwright.config.ts", "server/src", "shared", "web/src", "scripts", "vite.config.ts"]
+  "include": ["server/src", "web/src", "scripts", "vite.config.ts"]
 }

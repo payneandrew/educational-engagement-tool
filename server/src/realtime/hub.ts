@@ -2,7 +2,6 @@ import type { ChangeStream, ResumeToken } from 'mongodb'
 import { annotations } from '../db'
 import type { AnnotationDoc } from '../models'
 import { changedAfter, currentSeq, toDTO } from '../services/annotations'
-import { channelKey } from '../services/channel'
 
 export interface SseMessage {
   id?: number
@@ -11,7 +10,7 @@ export interface SseMessage {
 }
 
 /**
- * One connected viewer of one channel (document × group).
+ * One connected viewer of one document's annotation channel.
  *
  * Invariant: everything with seq <= `hw` has already been sent. Live events are applied only
  * if they are exactly hw+1; anything further ahead means we missed something (dropped
@@ -24,7 +23,6 @@ export class Subscriber {
 
   constructor(
     readonly documentId: string,
-    readonly groupId: string,
     public hw: number,
     private readonly emit: (m: SseMessage) => void,
   ) {}
@@ -48,13 +46,13 @@ export class Subscriber {
     if (this.replaying || this.closed) return
     this.replaying = true
     try {
-      const latest = await currentSeq(this.documentId, this.groupId)
+      const latest = await currentSeq(this.documentId)
       if (this.hw > latest) {
         // Client claims to have seen the future (DB was reset). Tell it to start over.
         this.emit({ event: 'resync', data: JSON.stringify({ seq: latest }) })
         this.hw = latest
       } else {
-        for (const doc of await changedAfter(this.documentId, this.groupId, this.hw)) {
+        for (const doc of await changedAfter(this.documentId, this.hw)) {
           if (this.closed) return
           this.send(doc)
         }
@@ -93,16 +91,11 @@ export class Hub {
     return n
   }
 
-  /**
-   * Group scoping lives here: a channel key includes the group, subscribers can only be
-   * registered under the caller's own group (the route takes it from the server-side user
-   * record, never from the request), and change events are routed by the document's own
-   * groupId. A Group B event is never even looked at when fanning out to Group A.
-   */
-  async subscribe(documentId: string, groupId: string, lastEventId: number | undefined, emit: (m: SseMessage) => void) {
-    const start = lastEventId ?? (await currentSeq(documentId, groupId))
-    const sub = new Subscriber(documentId, groupId, start, emit)
-    const key = channelKey(documentId, groupId)
+  /** Channels are keyed by documentId; change events are routed by the annotation's own documentId. */
+  async subscribe(documentId: string, lastEventId: number | undefined, emit: (m: SseMessage) => void) {
+    const start = lastEventId ?? (await currentSeq(documentId))
+    const sub = new Subscriber(documentId, start, emit)
+    const key = documentId
     if (!this.channels.has(key)) this.channels.set(key, new Set())
     this.channels.get(key)!.add(sub)
     // Register BEFORE replaying: live events that land during the replay are buffered, not lost.
@@ -119,7 +112,7 @@ export class Hub {
   }
 
   private route(doc: AnnotationDoc) {
-    for (const sub of this.channels.get(channelKey(doc.documentId, doc.groupId)) ?? []) sub.deliver(doc)
+    for (const sub of this.channels.get(doc.documentId) ?? []) sub.deliver(doc)
   }
 
   private async run() {

@@ -4,7 +4,6 @@ import { currentUserId } from './session'
 
 /**
  * Client view of one document's annotation channel: REST snapshot → SSE stream → idempotent apply.
- * The server decides what this user may see (their group's channel); nothing is filtered here.
  */
 export function useAnnotations(documentId: string) {
   const byId = reactive<Record<string, Annotation>>({})
@@ -53,10 +52,15 @@ export function useAnnotations(documentId: string) {
   })
 
   const all = computed(() => Object.values(byId))
-  const roots = computed(() => all.value.filter(a => a.kind === 'root'))
-  // Deleted replies are tombstones kept for sync; they are simply not shown.
+  // Replies read as a conversation, oldest first. Deleted replies are tombstones kept for sync; they are simply not shown.
   const repliesOf = (rootId: string) =>
     all.value.filter(a => a.parentId === rootId && !a.deletedAt).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  // Newest first. A deleted root stays only while it has replies (a "[deleted]" parent for them).
+  const roots = computed(() =>
+    all.value
+      .filter(a => a.kind === 'root' && (!a.deletedAt || repliesOf(a.id).length))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+  )
 
-  return { load, apply, roots, repliesOf, byId, connected }
+  return { load, apply, roots, repliesOf, connected }
 }

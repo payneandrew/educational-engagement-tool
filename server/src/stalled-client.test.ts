@@ -2,7 +2,6 @@ import { serve } from '@hono/node-server'
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import net from 'node:net'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createAnchor } from '../../shared/anchor'
 
 // End-to-end over real TCP: one client opens the SSE stream and never reads a byte (a dead phone, a
 // suspended tab). The server must cut it off rather than buffer for it forever, and a healthy client
@@ -11,10 +10,9 @@ let rs: MongoMemoryReplSet
 let server: ReturnType<typeof serve>
 let port: number
 let m: { db: typeof import('./db'); svc: typeof import('./services/annotations'); hub: typeof import('./realtime/hub') }
-let text = ''
 
 const DOC = 'civil-disobedience'
-const alice = { _id: 'u-alice', name: 'Alice Chen', role: 'student', groupId: 'g-a' } as const
+const alice = { _id: 'u-alice', name: 'Alice Chen', role: 'student' } as const
 
 const waitFor = async (pred: () => boolean, ms: number) => {
   const t = Date.now()
@@ -45,7 +43,6 @@ beforeAll(async () => {
   await (await import('./seed')).seed()
   await m.db.annotations.deleteMany({})
   await m.db.counters.deleteMany({})
-  text = (await m.db.documents.findOne({ _id: DOC }))!.text
   m.hub.hub.start()
   await m.hub.hub.started
   await new Promise<void>(res => {
@@ -71,7 +68,7 @@ describe('stalled client', () => {
     let posted = 0
     const start = Date.now()
     while (m.hub.hub.subscriberCount === 2 && Date.now() - start < 40_000) {
-      await m.svc.createRoot(alice, DOC, { anchor: createAnchor(text, 10, 30), body })
+      await m.svc.createRoot(alice, DOC, body)
       posted++
     }
 
@@ -83,7 +80,7 @@ describe('stalled client', () => {
 
     // And the stalled client can come back and catch up from MongoDB: nothing was lost, only delayed.
     const got: number[] = []
-    const re = await m.hub.hub.subscribe(DOC, 'g-a', 0, e => e.id && got.push(e.id))
+    const re = await m.hub.hub.subscribe(DOC, 0, e => e.id && got.push(e.id))
     expect(got).toHaveLength(posted)
     re.close()
 

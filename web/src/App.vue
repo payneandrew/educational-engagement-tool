@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { client, unwrap } from './api'
 import DocumentView from './DocumentView.vue'
-import InstructorView from './InstructorView.vue'
 import { currentUserId } from './session'
 
-type UserRow = { _id: string; name: string; role: 'student' | 'instructor'; groupId: string | null }
+type UserRow = { _id: string; name: string; role: 'student' | 'instructor' }
 const users = ref<UserRow[]>([])
 const docs = ref<{ id: string; title: string; author: string; wordCount: number }[]>([])
 const hash = ref(location.hash)
@@ -21,11 +20,6 @@ onMounted(async () => {
   docs.value = await unwrap(await client.api.documents.$get())
 })
 onUnmounted(() => window.removeEventListener('hashchange', onHash))
-
-// Switching identity: instructors have no reader (no group channel), students have no instructor view.
-watch(me, u => {
-  if (u?.role === 'instructor' && docId.value) location.hash = ''
-})
 </script>
 
 <template>
@@ -34,17 +28,14 @@ watch(me, u => {
     <span class="spacer" />
     <label>Viewing as
       <select v-model="currentUserId">
-        <option v-for="u in users" :key="u._id" :value="u._id">
-          {{ u.name }} — {{ u.role === 'instructor' ? 'instructor' : users.length ? (u.groupId === 'g-a' ? 'Group A' : 'Group B') : '' }}
-        </option>
+        <option v-for="u in users" :key="u._id" :value="u._id">{{ u.name }} — {{ u.role }}</option>
       </select>
     </label>
   </header>
 
   <template v-if="me">
-    <InstructorView v-if="me.role === 'instructor'" :key="me._id" />
     <!-- :key on the user remounts the reader, which re-fetches the snapshot and reopens the stream as the new user -->
-    <DocumentView v-else-if="docId" :key="`${me._id}:${docId}`" :document-id="docId" />
+    <DocumentView v-if="docId" :key="`${me._id}:${docId}`" :document-id="docId" :can-post="me.role === 'student'" />
     <div v-else class="page">
       <h2>Readings</h2>
       <ul class="doc-list">

@@ -14,8 +14,7 @@
     "dev:web": "vite",
     "seed": "tsx server/src/seed.ts",
     "typecheck": "vue-tsc --noEmit",
-    "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test": "vitest run"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",
@@ -26,7 +25,6 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
     "@types/node": "^26.6.5",
     "@vitejs/plugin-vue": "^6.0.10",
     "concurrently": "^10.0.6",
