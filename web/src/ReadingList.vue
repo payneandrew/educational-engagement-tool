@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { client, unwrap, type Reading } from './api'
+import { client, messageOf, unwrap, type Reading } from './api'
 import { plural } from './format'
 
 const props = defineProps<{ canCreate: boolean }>()
@@ -19,7 +19,7 @@ onMounted(async () => {
   try {
     readings.value = await unwrap(await client.api.readings.$get())
   } catch (e) {
-    loadError.value = (e as Error).message
+    loadError.value = messageOf(e)
   }
 })
 
@@ -43,7 +43,7 @@ async function create() {
     description.value = ''
     formOpen.value = false
   } catch (e) {
-    formError.value = (e as Error).message
+    formError.value = messageOf(e)
   } finally {
     busy.value = false
   }

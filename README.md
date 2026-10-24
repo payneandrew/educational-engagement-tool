@@ -65,7 +65,8 @@ scripts/      dev MongoDB launcher
 
 ## Tests
 
-`npm test` runs Vitest against a throwaway MongoDB:
+`npm test` runs Vitest; the server tests use a throwaway MongoDB:
 
 - `api.test.ts` calls the real app over HTTP (auth, role middleware, validation): `GET /api/readings` returns the right annotation and student counts per reading (replies included, zero for an untouched reading); `POST /api/readings` lets instructors create (input trimmed, new reading listed first) and gives students 403, unknown users 401, and a blank title or description 400; annotation routes let students post and anyone read, give instructors 403 on every write, and reject empty annotations (400) and unknown readings (404); and the live stream opens immediately and pushes new annotations to a connected client.
 - `annotations.test.ts` covers the annotation service: events reach only that reading's subscribers, edits are published and marked edited, deleting a root deletes its replies (and publishes one `deleted` event), only authors can edit or delete, replies are one level deep, listing is newest first, and empty annotations are rejected.
+- `web/src/errors.test.ts` covers how the frontend turns failures into messages: the API's own `{ error }` text, a readable message for empty or non-JSON error bodies (like the empty 502 Vite's proxy sends while the API restarts), and a network failure.

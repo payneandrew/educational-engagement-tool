@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { client, unwrap, type ReadingDetail } from './api'
+import { client, messageOf, unwrap, type ReadingDetail } from './api'
 import AnnotationFeed from './AnnotationFeed.vue'
 import { provideAnnotations } from './useAnnotations'
 
@@ -22,7 +22,7 @@ onMounted(async () => {
       await client.api.readings[':id'].$get({ param: { id: props.readingId } }),
     )
   } catch (e) {
-    loadError.value = (e as Error).message
+    loadError.value = messageOf(e)
   }
 })
 </script>

@@ -138,8 +138,11 @@ describe('GET /readings/:id/stream', () => {
 
     await send('POST', `/readings/${READING}/annotations`, 'u-alice', { body: 'live!' })
     const message = await next()
-    expect(message).toMatch(/^event: annotation\n/)
-    expect(message).toContain('"body":"live!"')
+    expect(message).toMatch(/^data: /)
+    expect(JSON.parse(message.slice('data: '.length))).toMatchObject({
+      type: 'annotation',
+      annotation: { body: 'live!', authorName: 'Alice Chen' },
+    })
 
     // A browser disconnecting reaches the route as the response body being cancelled.
     await reader.cancel()

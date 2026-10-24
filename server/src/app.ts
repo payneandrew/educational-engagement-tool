@@ -50,13 +50,16 @@ export const app = new Hono<Env>()
   .onError((err, c) => {
     if (err instanceof HTTPException) return c.json({ error: err.message }, err.status)
     console.error(err)
-    return c.json({ error: 'internal error' }, 500)
+    return c.json({ error: 'Something went wrong on the server. Please try again.' }, 500)
   })
   .use('/readings/*', auth)
   .use('/annotations/*', auth)
 
   // Seeded identities for the user-switcher (stand-in for login).
-  .get('/users', async (c) => c.json(await users.find().sort({ _id: 1 }).toArray()))
+  .get('/users', async (c) => {
+    const list = await users.find().sort({ _id: 1 }).toArray()
+    return c.json(list.map(({ _id, name, role }) => ({ id: _id, name, role })))
+  })
 
   .get('/readings', async (c) => c.json(await listReadings()))
 
@@ -94,10 +97,10 @@ export const app = new Hono<Env>()
       // until the first body bytes, and the client only loads the list once the stream has opened.
       // `retry` also tells the browser to wait 3s between reconnect attempts.
       await stream.write('retry: 3000\n\n')
+      // Each message's data is one AnnotationEvent (events.ts); the client imports that type.
       const unsubscribe = subscribe(c.req.param('id'), (event) => {
-        const data = JSON.stringify(event.type === 'annotation' ? event.annotation : event.ids)
         // A write racing a disconnect rejects; the stream is closing anyway, so drop it.
-        stream.writeSSE({ event: event.type, data }).catch(() => {})
+        stream.writeSSE({ data: JSON.stringify(event) }).catch(() => {})
       })
       // Hold the response open until the browser disconnects.
       await new Promise<void>((resolve) => stream.onAbort(resolve))

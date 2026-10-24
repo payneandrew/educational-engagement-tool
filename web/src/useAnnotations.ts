@@ -1,8 +1,7 @@
 import { computed, inject, onScopeDispose, provide, reactive, ref, type InjectionKey } from 'vue'
-import { client, unwrap, type Annotation } from './api'
+import type { AnnotationEvent } from '../../server/src/events'
+import { client, messageOf, unwrap, type Annotation } from './api'
 import { currentUserId } from './session'
-
-type Change = { type: 'annotation'; annotation: Annotation } | { type: 'deleted'; ids: string[] }
 
 /**
  * One reading's discussion: the annotations, the live connection, and the actions that change them.
@@ -21,15 +20,15 @@ function createAnnotations(readingId: string) {
   let es: EventSource | undefined
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let disposed = false
-  let pending: Change[] | null = null // non-null while a load is in flight
+  let pending: AnnotationEvent[] | null = null // non-null while a load is in flight
 
-  function applyChange(c: Change) {
+  function applyEvent(c: AnnotationEvent) {
     if (c.type === 'annotation') byId[c.annotation.id] = c.annotation
     else for (const id of c.ids) delete byId[id]
   }
-  function receive(c: Change) {
+  function receive(c: AnnotationEvent) {
     if (pending) pending.push(c)
-    else applyChange(c)
+    else applyEvent(c)
   }
 
   async function load() {
@@ -42,11 +41,11 @@ function createAnnotations(readingId: string) {
       for (const a of list) byId[a.id] = a
       loadError.value = ''
     } catch (e) {
-      loadError.value = (e as Error).message
+      loadError.value = messageOf(e)
     } finally {
       const queued = pending
       pending = null
-      queued.forEach(applyChange)
+      queued.forEach(applyEvent)
     }
   }
 
@@ -60,12 +59,8 @@ function createAnnotations(readingId: string) {
       connectionLost.value = false
       void load()
     }
-    es.addEventListener('annotation', (e) =>
-      receive({ type: 'annotation', annotation: JSON.parse((e as MessageEvent).data) }),
-    )
-    es.addEventListener('deleted', (e) =>
-      receive({ type: 'deleted', ids: JSON.parse((e as MessageEvent).data) }),
-    )
+    // Each message is one AnnotationEvent, serialized by the server's stream route.
+    es.onmessage = (e: MessageEvent<string>) => receive(JSON.parse(e.data) as AnnotationEvent)
     es.onerror = () => {
       connectionLost.value = true
       // While CONNECTING the browser retries by itself. If it gave up (CLOSED, e.g. the server answered
@@ -106,13 +101,13 @@ function createAnnotations(readingId: string) {
    * waiting for the SSE event (which arrives too and just sets the same values again). It goes through
    * `receive`, like a live event, so the same ordering rules hold. Resolves to an error message, or null.
    */
-  async function write(request: () => Promise<Change>): Promise<string | null> {
+  async function write(request: () => Promise<AnnotationEvent>): Promise<string | null> {
     busy.value = true
     try {
       receive(await request())
       return null
     } catch (e) {
-      return (e as Error).message
+      return messageOf(e)
     } finally {
       busy.value = false
     }
