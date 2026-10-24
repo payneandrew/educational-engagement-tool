@@ -56,4 +56,5 @@ onUnmounted(() => window.removeEventListener('hashchange', onHash))
     />
     <ReadingList v-else :key="me.id" :can-create="me.role === 'instructor'" />
   </template>
+  <p v-else class="mx-auto max-w-3xl px-4 py-5 text-sm text-muted" role="status">Loading…</p>
 </template>

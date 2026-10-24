@@ -108,7 +108,8 @@ const fmt = (iso: string) => new Date(iso).toLocaleDateString([], { dateStyle: '
     </form>
 
     <p v-if="loadError" class="text-sm text-red-600 dark:text-red-400">{{ loadError }}</p>
-    <p v-else-if="readings && !readings.length" class="text-sm text-muted">
+    <p v-else-if="!readings" class="text-sm text-muted" role="status">Loading readings…</p>
+    <p v-else-if="!readings.length" class="text-sm text-muted">
       {{
         canCreate
           ? 'No readings yet. Create one to get your students started.'

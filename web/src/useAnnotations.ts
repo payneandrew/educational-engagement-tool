@@ -17,6 +17,8 @@ function createAnnotations(readingId: string) {
   /** True only after an established stream drops, so the first connect doesn't flash a warning. */
   const connectionLost = ref(false)
   const loadError = ref('')
+  /** True until the first load finishes. Reloads after a reconnect keep showing the current list. */
+  const loading = ref(true)
   let es: EventSource | undefined
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let disposed = false
@@ -43,6 +45,7 @@ function createAnnotations(readingId: string) {
     } catch (e) {
       loadError.value = messageOf(e)
     } finally {
+      loading.value = false
       const queued = pending
       pending = null
       queued.forEach(applyEvent)
@@ -152,6 +155,7 @@ function createAnnotations(readingId: string) {
     total,
     studentCount,
     connectionLost,
+    loading,
     loadError,
     busy,
     create,

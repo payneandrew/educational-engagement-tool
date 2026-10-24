@@ -5,7 +5,7 @@ import { useAnnotations } from './useAnnotations'
 
 /** Students post; instructors read. */
 defineProps<{ canPost: boolean }>()
-const { roots, repliesOf, total, busy, create, reply } = useAnnotations()
+const { roots, repliesOf, total, loading, busy, create, reply } = useAnnotations()
 
 const draft = ref('')
 const draftError = ref('')
@@ -31,7 +31,7 @@ async function sendReply(rootId: string) {
 <template>
   <section class="rounded-lg border border-line bg-panel p-3.5">
     <h3 class="mb-2 text-sm font-semibold tracking-wide text-muted uppercase">
-      Discussion ({{ total }})
+      Discussion<template v-if="!loading"> ({{ total }})</template>
     </h3>
 
     <form v-if="canPost" class="mb-2" @submit.prevent="post">
@@ -44,7 +44,8 @@ async function sendReply(rootId: string) {
       </div>
     </form>
 
-    <p v-if="!roots.length" class="text-sm text-muted">
+    <p v-if="loading" class="text-sm text-muted" role="status">Loading discussion…</p>
+    <p v-else-if="!roots.length" class="text-sm text-muted">
       {{
         canPost
           ? 'No annotations yet. Start the discussion.'

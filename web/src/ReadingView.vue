@@ -13,6 +13,7 @@ const {
   total,
   studentCount,
   connectionLost,
+  loading,
   loadError: annotationsError,
 } = provideAnnotations(props.readingId)
 
@@ -46,11 +47,11 @@ onMounted(async () => {
       <dl v-if="!canPost" class="mb-4 grid grid-cols-2 gap-2.5">
         <div class="rounded-lg border border-line bg-panel px-3.5 py-2.5">
           <dt class="text-xs tracking-wide text-muted uppercase">Annotations</dt>
-          <dd class="mt-0.5 text-2xl font-semibold">{{ total }}</dd>
+          <dd class="mt-0.5 text-2xl font-semibold">{{ loading ? '–' : total }}</dd>
         </div>
         <div class="rounded-lg border border-line bg-panel px-3.5 py-2.5">
           <dt class="text-xs tracking-wide text-muted uppercase">Students participating</dt>
-          <dd class="mt-0.5 text-2xl font-semibold">{{ studentCount }}</dd>
+          <dd class="mt-0.5 text-2xl font-semibold">{{ loading ? '–' : studentCount }}</dd>
         </div>
       </dl>
       <p
@@ -62,5 +63,6 @@ onMounted(async () => {
       </p>
       <AnnotationFeed :can-post="canPost" />
     </template>
+    <p v-else-if="!loadError" class="mt-2.5 text-sm text-muted" role="status">Loading reading…</p>
   </div>
 </template>
