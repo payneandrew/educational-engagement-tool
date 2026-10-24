@@ -17,6 +17,7 @@ const post = (userId: string, json: unknown) => send('POST', '/readings', userId
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create({ binary: { version: '7.0.14' } })
   process.env.MONGO_URI = mongod.getUri()
+  process.env.HEARTBEAT_MS = '100' // so the heartbeat test needn't wait 25 seconds
   modules = { app: (await import('./app')).app, db: await import('./db') }
   await modules.db.initDb()
   await (await import('./seed')).seed()
@@ -175,27 +176,72 @@ describe('annotation routes', () => {
   })
 })
 
+/** Opens a reading's live stream as `userId`, the way a browser would. */
+async function openStream(readingId: string, userId: string) {
+  const res = await modules.app.request(`/api/readings/${readingId}/stream`, {
+    headers: { 'x-user-id': userId },
+  })
+  const reader = res.body!.getReader()
+  const next = async () => new TextDecoder().decode((await reader.read()).value)
+  return {
+    res,
+    next,
+    /** The next event's data, skipping heartbeat comments. */
+    async nextEvent() {
+      for (;;) {
+        const chunk = await next()
+        if (chunk.startsWith('data: ')) return JSON.parse(chunk.slice('data: '.length))
+      }
+    },
+    // A browser disconnecting reaches the route as the response body being cancelled.
+    close: () => reader.cancel(),
+  }
+}
+
+const dana = { id: 'u-dana', name: 'Prof. Dana Reyes' }
+const alice = { id: 'u-alice', name: 'Alice Chen' }
+
 describe('GET /readings/:id/stream', () => {
   it('opens immediately and pushes new annotations while connected', async () => {
     const READING = 'on-liberty-ch2'
-    const res = await modules.app.request(`/api/readings/${READING}/stream`, {
-      headers: { 'x-user-id': 'u-dana' },
-    })
-    expect(res.headers.get('content-type')).toBe('text/event-stream')
-    const reader = res.body!.getReader()
-    const next = async () => new TextDecoder().decode((await reader.read()).value)
-
-    expect(await next()).toBe('retry: 3000\n\n') // sent before any event, so the stream opens
+    const stream = await openStream(READING, 'u-dana')
+    expect(stream.res.headers.get('content-type')).toBe('text/event-stream')
+    expect(await stream.next()).toBe('retry: 3000\n\n') // sent before any event, so the stream opens
+    expect(await stream.nextEvent()).toEqual({ type: 'viewers', viewers: [dana] })
 
     await send('POST', `/readings/${READING}/annotations`, 'u-alice', { body: 'live!' })
-    const message = await next()
-    expect(message).toMatch(/^data: /)
-    expect(JSON.parse(message.slice('data: '.length))).toMatchObject({
+    expect(await stream.nextEvent()).toMatchObject({
       type: 'annotation',
       annotation: { body: 'live!', authorName: 'Alice Chen' },
     })
+    await stream.close()
+  })
 
-    // A browser disconnecting reaches the route as the response body being cancelled.
-    await reader.cancel()
+  it('sends a heartbeat comment while the stream is quiet', async () => {
+    const stream = await openStream('natural-selection', 'u-dana')
+    expect(await stream.next()).toBe('retry: 3000\n\n')
+    await stream.nextEvent() // the viewer list
+    expect(await stream.next()).toBe(': ping\n\n') // HEARTBEAT_MS is 100 ms in these tests
+    await stream.close()
+  })
+
+  it('tells everyone on a reading who is here as people arrive and leave', async () => {
+    const READING = 'civil-disobedience'
+    const danasTab = await openStream(READING, 'u-dana')
+    expect(await danasTab.nextEvent()).toEqual({ type: 'viewers', viewers: [dana] })
+
+    const alicesTab = await openStream(READING, 'u-alice')
+    expect(await alicesTab.nextEvent()).toEqual({ type: 'viewers', viewers: [dana, alice] })
+    expect(await danasTab.nextEvent()).toEqual({ type: 'viewers', viewers: [dana, alice] })
+
+    // A second tab of Alice's doesn't count her twice, and closing it doesn't remove her.
+    const alicesSecondTab = await openStream(READING, 'u-alice')
+    expect(await danasTab.nextEvent()).toEqual({ type: 'viewers', viewers: [dana, alice] })
+    await alicesSecondTab.close()
+    expect(await danasTab.nextEvent()).toEqual({ type: 'viewers', viewers: [dana, alice] })
+
+    await alicesTab.close()
+    expect(await danasTab.nextEvent()).toEqual({ type: 'viewers', viewers: [dana] })
+    await danasTab.close()
   })
 })

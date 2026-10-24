@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { client, messageOf, unwrap, type ReadingDetail } from './api'
 import AnnotationFeed from './AnnotationFeed.vue'
+import { currentUserId } from './session'
 import { provideAnnotations } from './useAnnotations'
 
 const props = defineProps<{ readingId: string; canPost: boolean }>()
@@ -13,6 +14,7 @@ const {
   total,
   studentCount,
   connectionLost,
+  viewers,
   loading,
   loadError: annotationsError,
 } = provideAnnotations(props.readingId)
@@ -25,6 +27,12 @@ onMounted(async () => {
   } catch (error) {
     loadError.value = messageOf(error)
   }
+})
+
+/** "Alice Chen, Bob Okafor and you": who else has this reading open, plus you. */
+const othersHere = computed(() => {
+  const names = viewers.value.filter((v) => v.id !== currentUserId.value).map((v) => v.name)
+  return names.length ? [...names, 'you'].join(', ').replace(/, (?=[^,]*$)/, ' and ') : ''
 })
 </script>
 
@@ -42,6 +50,10 @@ onMounted(async () => {
           {{ new Date(reading.createdAt).toLocaleDateString([], { dateStyle: 'medium' }) }}
         </p>
         <p class="mt-3 leading-relaxed whitespace-pre-wrap">{{ reading.description }}</p>
+        <p v-if="othersHere" class="mt-3 flex items-center gap-2 text-sm text-muted">
+          <span class="size-2 rounded-full bg-green-500" aria-hidden="true" />
+          {{ viewers.length }} people here now: {{ othersHere }}
+        </p>
       </article>
       <!-- Instructor overview: counts come from the live feed, so they update as students post. -->
       <dl v-if="!canPost" class="mb-4 grid grid-cols-2 gap-2.5">

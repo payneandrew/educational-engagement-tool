@@ -62,15 +62,19 @@ onUnmounted(() => window.removeEventListener('hashchange', onHash))
     <!-- :key on the user remounts the page, which re-fetches and (for a reading) reopens the stream as the new user -->
     <ReadingView
       v-if="readingId"
-      :key="`${currentUser.id}:${readingId}`"
+      :key="`reading:${currentUser.id}:${readingId}`"
       :reading-id="readingId"
       :can-post="currentUser.role === 'student'"
     />
     <ParticipationView
       v-else-if="onParticipation && currentUser.role === 'instructor'"
-      :key="currentUser.id"
+      :key="`participation:${currentUser.id}`"
     />
-    <ReadingList v-else :key="currentUser.id" :can-create="currentUser.role === 'instructor'" />
+    <ReadingList
+      v-else
+      :key="`readings:${currentUser.id}`"
+      :can-create="currentUser.role === 'instructor'"
+    />
   </template>
   <p v-else class="mx-auto max-w-3xl px-4 py-5 text-sm text-muted" role="status">Loading…</p>
 </template>

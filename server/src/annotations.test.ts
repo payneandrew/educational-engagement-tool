@@ -1,6 +1,6 @@
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import type { AnnotationEvent } from './events'
+import type { ReadingEvent } from './events'
 
 // Real (throwaway) MongoDB. Imports are dynamic so MONGO_URI is set before db.ts reads it.
 let mongod: MongoMemoryServer
@@ -17,7 +17,7 @@ const bob = { _id: 'u-bob', name: 'Bob Okafor', role: 'student' } as const
 
 /** Collects the events published for one reading. */
 function listen(readingId: string) {
-  const got: AnnotationEvent[] = []
+  const got: ReadingEvent[] = []
   const stop = modules.events.subscribe(readingId, (event) => got.push(event))
   return { got, stop }
 }

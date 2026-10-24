@@ -1,5 +1,5 @@
 import { computed, inject, onScopeDispose, provide, reactive, ref, type InjectionKey } from 'vue'
-import type { AnnotationEvent } from '../../server/src/events'
+import type { AnnotationEvent, ReadingEvent } from '../../server/src/events'
 import { client, messageOf, unwrap, type Annotation } from './api'
 import { currentUserId } from './session'
 
@@ -16,6 +16,8 @@ function createAnnotations(readingId: string) {
   const byId = reactive<Record<string, Annotation>>({})
   /** True only after an established stream drops, so the first connect doesn't flash a warning. */
   const connectionLost = ref(false)
+  /** Who has this reading open right now, from the server's `viewers` events. */
+  const viewers = ref<{ id: string; name: string }[]>([])
   const loadError = ref('')
   /** True until the first load finishes. Reloads after a reconnect keep showing the current list. */
   const loading = ref(true)
@@ -66,9 +68,12 @@ function createAnnotations(readingId: string) {
       connectionLost.value = false
       void load()
     }
-    // Each message is one AnnotationEvent, serialized by the server's stream route.
-    eventSource.onmessage = (message: MessageEvent<string>) =>
-      receive(JSON.parse(message.data) as AnnotationEvent)
+    // Each message is one ReadingEvent, serialized by the server's stream route.
+    eventSource.onmessage = (message: MessageEvent<string>) => {
+      const event = JSON.parse(message.data) as ReadingEvent
+      if (event.type === 'viewers') viewers.value = event.viewers
+      else receive(event)
+    }
     eventSource.onerror = () => {
       connectionLost.value = true
       // While CONNECTING the browser retries by itself. If it gave up (CLOSED, e.g. the server answered
@@ -172,6 +177,7 @@ function createAnnotations(readingId: string) {
     studentCount,
     authors,
     connectionLost,
+    viewers,
     loading,
     loadError,
     busy,
