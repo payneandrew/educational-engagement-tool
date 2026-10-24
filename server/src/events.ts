@@ -23,6 +23,3 @@ export function subscribe(readingId: string, listener: (event: AnnotationEvent) 
   bus.on(readingId, listener)
   return () => void bus.off(readingId, listener)
 }
-
-export const subscriberCount = () =>
-  bus.eventNames().reduce((n, name) => n + bus.listenerCount(name), 0)

@@ -4,7 +4,7 @@ import { HTTPException } from 'hono/http-exception'
 import { streamSSE } from 'hono/streaming'
 import { users } from './db'
 import type { UserDoc } from './models'
-import { subscribe, subscriberCount } from './events'
+import { subscribe } from './events'
 import { bodySchema, readingSchema, validate } from './schemas'
 import {
   createReply,
@@ -17,8 +17,6 @@ import { AppError } from './services/errors'
 import { createReading, getReading, listReadings } from './services/readings'
 
 type Env = { Variables: { user: UserDoc } }
-
-export const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MS ?? 20_000)
 
 /** No real auth: the caller names a seeded user, and the server looks up their role from its own records. */
 const auth = createMiddleware<Env>(async (c, next) => {
@@ -59,8 +57,6 @@ export const app = new Hono<Env>()
   .use('/readings/*', auth)
   .use('/annotations/*', auth)
 
-  .get('/health', (c) => c.json({ ok: true, subscribers: subscriberCount() }))
-
   // Seeded identities for the user-switcher (stand-in for login).
   .get('/users', async (c) => c.json(await users.find().sort({ _id: 1 }).toArray()))
 
@@ -92,26 +88,23 @@ export const app = new Hono<Env>()
     c.json(await deleteAnnotation(c.get('user'), c.req.param('id'))),
   )
 
-  // Live updates for one reading. The client loads the full list whenever this (re)connects, so the
-  // stream only has to carry what happens while it's open.
-  .get('/readings/:id/stream', (c) => {
-    const readingId = c.req.param('id')
-    c.header('X-Accel-Buffering', 'no') // nginx: don't buffer the stream
-    return streamSSE(c, async (stream) => {
+  // Live updates for one reading. The client reloads the full list whenever this (re)connects, so the
+  // stream only carries what happens while it's open.
+  .get('/readings/:id/stream', (c) =>
+    streamSSE(c, async (stream) => {
+      // Write something right away: proxies (including Vite's dev proxy) hold the response headers
+      // until the first body bytes, and the client only loads the list once the stream has opened.
+      // `retry` also tells the browser to wait 3s between reconnect attempts.
       await stream.write('retry: 3000\n\n')
-      const unsubscribe = subscribe(readingId, (event) => {
+      const unsubscribe = subscribe(c.req.param('id'), (event) => {
         const data = JSON.stringify(event.type === 'annotation' ? event.annotation : event.ids)
-        // A write racing a disconnect rejects; the abort handler below cleans up, so just drop it.
+        // A write racing a disconnect rejects; the stream is closing anyway, so drop it.
         stream.writeSSE({ event: event.type, data }).catch(() => {})
       })
-      stream.onAbort(unsubscribe)
-      // Comment lines (": ...") are ignored by EventSource but keep idle proxies from closing the socket.
-      while (!stream.aborted) {
-        await stream.sleep(HEARTBEAT_MS)
-        if (!stream.aborted) await stream.write(': heartbeat\n\n')
-      }
+      // Hold the response open until the browser disconnects.
+      await new Promise<void>((resolve) => stream.onAbort(resolve))
       unsubscribe()
-    })
-  })
+    }),
+  )
 
 export type AppType = typeof app

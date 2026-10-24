@@ -122,3 +122,25 @@ describe('annotation routes', () => {
     expect(missing.status).toBe(404)
   })
 })
+
+describe('GET /readings/:id/stream', () => {
+  it('opens immediately and pushes new annotations while connected', async () => {
+    const READING = 'on-liberty-ch2'
+    const res = await m.app.request(`/api/readings/${READING}/stream`, {
+      headers: { 'x-user-id': 'u-dana' },
+    })
+    expect(res.headers.get('content-type')).toBe('text/event-stream')
+    const reader = res.body!.getReader()
+    const next = async () => new TextDecoder().decode((await reader.read()).value)
+
+    expect(await next()).toBe('retry: 3000\n\n') // sent before any event, so the stream opens
+
+    await send('POST', `/readings/${READING}/annotations`, 'u-alice', { body: 'live!' })
+    const message = await next()
+    expect(message).toMatch(/^event: annotation\n/)
+    expect(message).toContain('"body":"live!"')
+
+    // A browser disconnecting reaches the route as the response body being cancelled.
+    await reader.cancel()
+  })
+})

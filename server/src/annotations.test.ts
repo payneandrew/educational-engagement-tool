@@ -72,7 +72,6 @@ describe('live events', () => {
     stop()
     await m.svc.createRoot(alice, READING, 'nobody is listening')
     expect(got).toEqual([])
-    expect(m.events.subscriberCount()).toBe(0)
   })
 })
 
