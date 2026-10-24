@@ -1,12 +1,18 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { client, messageOf, unwrap, type Reading } from './api'
 import { plural } from './format'
+import { titleMatches } from './search'
 
 const props = defineProps<{ canCreate: boolean }>()
 
 const readings = ref<Reading[] | null>(null)
 const loadError = ref('')
+
+const search = ref('')
+const matchingReadings = computed(
+  () => readings.value?.filter((reading) => titleMatches(reading.title, search.value)) ?? [],
+)
 
 const formOpen = ref(false)
 const title = ref('')
@@ -38,6 +44,7 @@ async function create() {
       }),
     )
     readings.value = [created, ...(readings.value ?? [])] // the list is newest first
+    search.value = '' // so the new reading isn't hidden by an old search
     success.value = `“${created.title}” has been assigned.`
     title.value = ''
     description.value = ''
@@ -116,8 +123,23 @@ const formatDate = (iso: string) => new Date(iso).toLocaleDateString([], { dateS
           : 'No readings have been assigned yet.'
       }}
     </p>
-    <ul v-else class="grid gap-2.5">
-      <li v-for="reading in readings" :key="reading.id">
+    <template v-else>
+      <input
+        v-model="search"
+        type="search"
+        class="field mb-3"
+        placeholder="Search readings by title…"
+        aria-label="Search readings by title"
+      />
+      <p v-if="!matchingReadings.length" class="text-sm text-muted">
+        No readings match “{{ search.trim() }}”.
+        <button class="cursor-pointer text-accent hover:underline" @click="search = ''">
+          Clear search
+        </button>
+      </p>
+    </template>
+    <ul v-if="matchingReadings.length" class="grid gap-2.5">
+      <li v-for="reading in matchingReadings" :key="reading.id">
         <a
           :href="`#/reading/${reading.id}`"
           class="grid gap-1 rounded-lg border border-line bg-panel px-4 py-3.5 transition-colors hover:border-accent"

@@ -16,11 +16,11 @@ npm run dev        # MongoDB (:27018) + API (:3001) + web (:5173); sample data i
 Open http://localhost:5173 and use **Viewing as** to pick a user:
 
 - **Prof. Dana Reyes** (instructor): create readings with **New reading**, see each reading's annotation count and number of participating students, and read every discussion, optionally filtered to one student's threads (their posts are highlighted). **Participation** shows every student's annotation count on every reading, flagging students who haven't posted anywhere.
-- **Alice, Bob, Carol** (students): browse readings (each shows its annotation count), post annotations, reply, and edit/delete your own.
+- **Alice, Bob, Carol** (students): browse and search readings by title (each shows its annotation count), post annotations, reply, and edit/delete your own.
 
 The choice is per tab (`sessionStorage`), so open Alice and Bob in two tabs to watch annotations appear live.
 
-Other commands: `npm run seed` resets the database to the sample data (in `server/src/seed.ts`), `npm test` runs the tests, `npm run typecheck` checks server and web together. `npm run lint` runs ESLint (config follows the `create-vue` defaults for Vue + TypeScript + Vitest, plus typescript-eslint's rules against unhandled promises) and `npm run format` applies Prettier; `lint:fix` and `format:check` also exist. To use your own MongoDB, set `MONGO_URI` and run `npm run dev:api` and `npm run dev:web` instead of `npm run dev`.
+Other commands: `npm run seed` resets the database to the sample data (`server/src/seed.ts` plus `demo-data.ts`: 10 students, 2 instructors, 8 readings and about 50 annotations; `npm run seed -- --minimal` loads just the small base set the tests use), `npm test` runs the tests, `npm run typecheck` checks server and web together. `npm run lint` runs ESLint (config follows the `create-vue` defaults for Vue + TypeScript + Vitest, plus typescript-eslint's rules against unhandled promises) and `npm run format` applies Prettier; `lint:fix` and `format:check` also exist. To use your own MongoDB, set `MONGO_URI` and run `npm run dev:api` and `npm run dev:web` instead of `npm run dev`.
 
 ## How it works
 
@@ -70,3 +70,4 @@ scripts/      dev MongoDB launcher
 - `api.test.ts` calls the real app over HTTP (auth, role middleware, validation): `GET /api/readings` returns the right annotation and student counts per reading (replies included, zero for an untouched reading); `POST /api/readings` lets instructors create (input trimmed, new reading listed first) and gives students 403, unknown users 401, and a blank title or description 400; annotation routes let students post and anyone read, give instructors 403 on every write, and reject empty annotations (400) and unknown readings (404); and the live stream opens immediately and pushes new annotations to a connected client.
 - `annotations.test.ts` covers the annotation service: events reach only that reading's subscribers, edits are published and marked edited, deleting a root deletes its replies (and publishes one `deleted` event with just the root's id), only authors can edit or delete, replies are one level deep, listing is newest first, and empty annotations are rejected.
 - `web/src/errors.test.ts` covers how the frontend turns failures into messages: the API's own `{ error }` text, a readable message for empty or non-JSON error bodies (like the empty 502 Vite's proxy sends while the API restarts), and a network failure.
+- `web/src/search.test.ts` covers the reading search: matching any part of a title regardless of case and accents, and an empty search matching everything.

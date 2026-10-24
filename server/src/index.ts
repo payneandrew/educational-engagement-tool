@@ -1,14 +1,14 @@
 import { serve } from '@hono/node-server'
 import { app } from './app'
 import { initDb, mongo, readings } from './db'
-import { seed } from './seed'
+import { seedDemo } from './seed'
 
 const port = Number(process.env.PORT ?? 3001)
 
 await initDb()
 if ((await readings.countDocuments()) === 0) {
   console.log('[api] empty database, seeding…')
-  await seed()
+  await seedDemo()
 }
 
 const server = serve({ fetch: app.fetch, port }, (info) =>

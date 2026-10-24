@@ -1,6 +1,8 @@
+import { ObjectId } from 'mongodb'
 import { resolve } from 'node:path'
-import { createIndexes, db, initDb, mongo, readings, users } from './db'
-import type { ReadingDoc, UserDoc } from './models'
+import { annotations, createIndexes, db, initDb, mongo, readings, users } from './db'
+import { DEMO_READINGS, DEMO_THREADS, DEMO_USERS, type DemoPost } from './demo-data'
+import type { AnnotationDoc, ReadingDoc, UserDoc } from './models'
 import { createReply, createRoot } from './services/annotations'
 
 const USERS: UserDoc[] = [
@@ -89,10 +91,52 @@ export async function seed() {
   )
 }
 
-// `npm run seed` — reset the database to its initial state.
-if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) {
-  await initDb()
+/**
+ * The base seed plus the demo data (demo-data.ts): more students, readings and discussion, for trying
+ * the app by hand. Demo annotations are inserted directly so they can carry realistic past timestamps
+ * (the service functions always stamp "now").
+ */
+export async function seedDemo() {
   await seed()
-  console.log('[seed] done')
+  await users.insertMany(DEMO_USERS)
+  await readings.insertMany(DEMO_READINGS)
+
+  const people = new Map([...USERS, ...DEMO_USERS].map((user) => [user._id, user]))
+  const assignedAt = new Map(
+    [...READINGS, ...DEMO_READINGS].map((reading) => [reading._id, reading.createdAt.getTime()]),
+  )
+  const demoAnnotations: AnnotationDoc[] = []
+  const toAnnotation = (readingId: string, post: DemoPost, parentId: string | null) => {
+    const author = people.get(post.by)!
+    const hoursIn = (hours: number) => new Date(assignedAt.get(readingId)! + hours * 3_600_000)
+    const annotation: AnnotationDoc = {
+      _id: new ObjectId().toHexString(),
+      readingId,
+      kind: parentId ? 'reply' : 'root',
+      parentId,
+      authorId: author._id,
+      authorName: author.name,
+      body: post.body,
+      createdAt: hoursIn(post.at),
+      editedAt: post.editedAt === undefined ? null : hoursIn(post.editedAt),
+    }
+    demoAnnotations.push(annotation)
+    return annotation
+  }
+  for (const [readingId, threads] of Object.entries(DEMO_THREADS)) {
+    for (const thread of threads) {
+      const root = toAnnotation(readingId, thread, null)
+      for (const reply of thread.replies ?? []) toAnnotation(readingId, reply, root._id)
+    }
+  }
+  await annotations.insertMany(demoAnnotations)
+}
+
+// `npm run seed` resets the database to the demo data; `npm run seed -- --minimal` to the base seed only.
+if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) {
+  const minimal = process.argv.includes('--minimal')
+  await initDb()
+  await (minimal ? seed() : seedDemo())
+  console.log(`[seed] done (${minimal ? 'minimal' : 'demo'} data)`)
   await mongo.close()
 }
