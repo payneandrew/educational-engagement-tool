@@ -1,18 +1,19 @@
-import { computed, onScopeDispose, reactive, ref } from 'vue'
+import { computed, inject, onScopeDispose, provide, reactive, ref, type InjectionKey } from 'vue'
 import { client, unwrap, type Annotation } from './api'
 import { currentUserId } from './session'
 
 type Change = { type: 'annotation'; annotation: Annotation } | { type: 'deleted'; ids: string[] }
 
 /**
- * Live view of one reading's discussion.
+ * One reading's discussion: the annotations, the live connection, and the actions that change them.
+ * The reading page creates it with `provideAnnotations`; components below it get it with `useAnnotations`.
  *
  * Every time the SSE stream (re)connects we load the full list from the API, then apply live events
  * on top. Loading on reconnect covers anything missed while disconnected, so the server never needs
  * to replay history. Events that arrive while a load is in flight are held back and applied after it,
  * so a slow response can't overwrite a newer edit or bring back a deleted post.
  */
-export function useAnnotations(readingId: string) {
+function createAnnotations(readingId: string) {
   const byId = reactive<Record<string, Annotation>>({})
   /** True only after an established stream drops, so the first connect doesn't flash a warning. */
   const connectionLost = ref(false)
@@ -97,6 +98,86 @@ export function useAnnotations(readingId: string) {
   // Only students can post, so distinct authors = students participating.
   const studentCount = computed(() => new Set(all.value.map((a) => a.authorId)).size)
 
-  // `apply` is for the results of this user's own writes: same path as live events, so the same ordering rules hold.
-  return { roots, repliesOf, total, studentCount, apply: receive, connectionLost, loadError }
+  /** True while one of this user's writes is in flight; the forms disable their buttons. */
+  const busy = ref(false)
+
+  /**
+   * Runs one of this user's writes and applies the result right away, so the author sees it without
+   * waiting for the SSE event (which arrives too and just sets the same values again). It goes through
+   * `receive`, like a live event, so the same ordering rules hold. Resolves to an error message, or null.
+   */
+  async function write(request: () => Promise<Change>): Promise<string | null> {
+    busy.value = true
+    try {
+      receive(await request())
+      return null
+    } catch (e) {
+      return (e as Error).message
+    } finally {
+      busy.value = false
+    }
+  }
+
+  const create = (body: string) =>
+    write(async () => ({
+      type: 'annotation',
+      annotation: await unwrap(
+        await client.api.readings[':id'].annotations.$post({
+          param: { id: readingId },
+          json: { body },
+        }),
+      ),
+    }))
+  const reply = (rootId: string, body: string) =>
+    write(async () => ({
+      type: 'annotation',
+      annotation: await unwrap(
+        await client.api.annotations[':id'].replies.$post({
+          param: { id: rootId },
+          json: { body },
+        }),
+      ),
+    }))
+  const edit = (id: string, body: string) =>
+    write(async () => ({
+      type: 'annotation',
+      annotation: await unwrap(
+        await client.api.annotations[':id'].$patch({ param: { id }, json: { body } }),
+      ),
+    }))
+  const remove = (id: string) =>
+    write(async () => ({
+      type: 'deleted',
+      ids: (await unwrap(await client.api.annotations[':id'].$delete({ param: { id } }))).ids,
+    }))
+
+  return {
+    roots,
+    repliesOf,
+    total,
+    studentCount,
+    connectionLost,
+    loadError,
+    busy,
+    create,
+    reply,
+    edit,
+    remove,
+  }
+}
+
+const key: InjectionKey<ReturnType<typeof createAnnotations>> = Symbol('annotations')
+
+/** Called once by the reading page: opens the live connection and shares it with the components below. */
+export function provideAnnotations(readingId: string) {
+  const annotations = createAnnotations(readingId)
+  provide(key, annotations)
+  return annotations
+}
+
+/** For components inside the reading page. */
+export function useAnnotations() {
+  const annotations = inject(key)
+  if (!annotations) throw new Error('useAnnotations() needs provideAnnotations() in a parent')
+  return annotations
 }

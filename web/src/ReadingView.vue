@@ -1,30 +1,20 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { client, unwrap, type FeedActions, type ReadingDetail } from './api'
+import { client, unwrap, type ReadingDetail } from './api'
 import AnnotationFeed from './AnnotationFeed.vue'
-import { currentUserId } from './session'
-import { useAnnotations } from './useAnnotations'
+import { provideAnnotations } from './useAnnotations'
 
-const props = defineProps<{
-  readingId: string
-  canPost: boolean
-  nameOf: (userId: string) => string
-}>()
+const props = defineProps<{ readingId: string; canPost: boolean }>()
 
 const reading = ref<ReadingDetail | null>(null)
 const loadError = ref('')
+// Opens the live connection; AnnotationFeed and AnnotationPost reach it with useAnnotations().
 const {
-  apply,
-  roots,
-  repliesOf,
   total,
   studentCount,
   connectionLost,
   loadError: annotationsError,
-} = useAnnotations(props.readingId)
-
-const busy = ref(false)
-const error = ref('')
+} = provideAnnotations(props.readingId)
 
 onMounted(async () => {
   try {
@@ -35,59 +25,6 @@ onMounted(async () => {
     loadError.value = (e as Error).message
   }
 })
-
-/**
- * Applying each result right away means the author sees their change without waiting for the SSE
- * event (which then arrives too and just sets the same values again).
- */
-async function run(fn: () => Promise<void>) {
-  busy.value = true
-  error.value = ''
-  try {
-    await fn()
-    return true
-  } catch (e) {
-    error.value = (e as Error).message
-    return false
-  } finally {
-    busy.value = false
-  }
-}
-
-const actions: FeedActions = {
-  create: (body) =>
-    run(async () => {
-      const annotation = await unwrap(
-        await client.api.readings[':id'].annotations.$post({
-          param: { id: props.readingId },
-          json: { body },
-        }),
-      )
-      apply({ type: 'annotation', annotation })
-    }),
-  reply: (rootId, body) =>
-    run(async () => {
-      const annotation = await unwrap(
-        await client.api.annotations[':id'].replies.$post({
-          param: { id: rootId },
-          json: { body },
-        }),
-      )
-      apply({ type: 'annotation', annotation })
-    }),
-  edit: (id, body) =>
-    run(async () => {
-      const annotation = await unwrap(
-        await client.api.annotations[':id'].$patch({ param: { id }, json: { body } }),
-      )
-      apply({ type: 'annotation', annotation })
-    }),
-  remove: (id) =>
-    run(async () => {
-      const { ids } = await unwrap(await client.api.annotations[':id'].$delete({ param: { id } }))
-      apply({ type: 'deleted', ids })
-    }),
-}
 </script>
 
 <template>
@@ -100,7 +37,7 @@ const actions: FeedActions = {
       <article class="mt-2.5 mb-4 rounded-lg border border-line bg-panel p-4">
         <h2 class="text-2xl font-bold">{{ reading.title }}</h2>
         <p class="text-sm text-muted">
-          Assigned by {{ nameOf(reading.createdBy) }} ·
+          Assigned by {{ reading.createdByName }} ·
           {{ new Date(reading.createdAt).toLocaleDateString([], { dateStyle: 'medium' }) }}
         </p>
         <p class="mt-3 leading-relaxed whitespace-pre-wrap">{{ reading.description }}</p>
@@ -123,16 +60,7 @@ const actions: FeedActions = {
       >
         Connection lost — reconnecting. New annotations may be delayed.
       </p>
-      <AnnotationFeed
-        :roots="roots"
-        :replies-of="repliesOf"
-        :total="total"
-        :me="currentUserId"
-        :can-post="canPost"
-        :busy="busy"
-        :error="error"
-        :actions="actions"
-      />
+      <AnnotationFeed :can-post="canPost" />
     </template>
   </div>
 </template>

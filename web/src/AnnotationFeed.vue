@@ -1,35 +1,30 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { Annotation, FeedActions } from './api'
 import AnnotationPost from './AnnotationPost.vue'
+import { useAnnotations } from './useAnnotations'
 
-const props = defineProps<{
-  /** Already sorted newest first. */
-  roots: Annotation[]
-  repliesOf: (rootId: string) => Annotation[]
-  /** Roots + replies. */
-  total: number
-  me: string
-  /** Students post; instructors read. */
-  canPost: boolean
-  busy: boolean
-  error: string
-  actions: FeedActions
-}>()
+/** Students post; instructors read. */
+defineProps<{ canPost: boolean }>()
+const { roots, repliesOf, total, busy, create, reply } = useAnnotations()
 
 const draft = ref('')
+const draftError = ref('')
 const replyingTo = ref<string | null>(null)
 const replyDraft = ref('')
+const replyError = ref('')
 
 async function post() {
-  if (await props.actions.create(draft.value)) draft.value = ''
+  draftError.value = (await create(draft.value)) ?? ''
+  if (!draftError.value) draft.value = ''
 }
 function startReply(rootId: string) {
   replyingTo.value = rootId
   replyDraft.value = ''
+  replyError.value = ''
 }
 async function sendReply(rootId: string) {
-  if (await props.actions.reply(rootId, replyDraft.value)) replyingTo.value = null
+  replyError.value = (await reply(rootId, replyDraft.value)) ?? ''
+  if (!replyError.value) replyingTo.value = null
 }
 </script>
 
@@ -41,13 +36,13 @@ async function sendReply(rootId: string) {
 
     <form v-if="canPost" class="mb-2" @submit.prevent="post">
       <textarea v-model="draft" class="field" rows="3" placeholder="Add an annotation…" />
+      <p v-if="draftError" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ draftError }}</p>
       <div class="mt-1.5 flex justify-end">
         <button type="submit" class="btn btn-primary" :disabled="busy || !draft.trim()">
           Post
         </button>
       </div>
     </form>
-    <p v-if="error" class="mb-2 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
 
     <p v-if="!roots.length" class="text-sm text-muted">
       {{
@@ -58,16 +53,9 @@ async function sendReply(rootId: string) {
     </p>
 
     <div v-for="root in roots" :key="root.id" class="border-t border-line py-2.5">
-      <AnnotationPost :post="root" :me="me" :busy="busy" :actions="actions" />
+      <AnnotationPost :post="root" />
       <div v-if="repliesOf(root.id).length" class="ml-3.5 border-l-2 border-line pl-2.5">
-        <AnnotationPost
-          v-for="r in repliesOf(root.id)"
-          :key="r.id"
-          :post="r"
-          :me="me"
-          :busy="busy"
-          :actions="actions"
-        />
+        <AnnotationPost v-for="r in repliesOf(root.id)" :key="r.id" :post="r" />
       </div>
       <template v-if="canPost">
         <form
@@ -76,6 +64,9 @@ async function sendReply(rootId: string) {
           @submit.prevent="sendReply(root.id)"
         >
           <textarea v-model="replyDraft" class="field" rows="2" placeholder="Reply…" />
+          <p v-if="replyError" class="mt-1 text-sm text-red-600 dark:text-red-400">
+            {{ replyError }}
+          </p>
           <div class="mt-1.5 flex justify-end gap-2">
             <button type="button" class="btn" @click="replyingTo = null">Cancel</button>
             <button type="submit" class="btn btn-primary" :disabled="busy || !replyDraft.trim()">

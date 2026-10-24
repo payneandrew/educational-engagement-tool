@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue'
 import { client, unwrap, type Reading } from './api'
 import { plural } from './format'
 
-const props = defineProps<{ canCreate: boolean; nameOf: (userId: string) => string }>()
+const props = defineProps<{ canCreate: boolean }>()
 
 const readings = ref<Reading[] | null>(null)
 const loadError = ref('')
@@ -124,7 +124,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleDateString([], { dateStyle: '
           <strong class="font-semibold">{{ r.title }}</strong>
           <span class="line-clamp-2">{{ r.description }}</span>
           <span class="text-sm text-muted">
-            Assigned by {{ nameOf(r.createdBy) }} · {{ fmt(r.createdAt) }} ·
+            Assigned by {{ r.createdByName }} · {{ fmt(r.createdAt) }} ·
             <span class="font-medium text-ink">{{ plural(r.annotationCount, 'annotation') }}</span>
             <template v-if="canCreate">
               · {{ plural(r.studentCount, 'student') }} participating

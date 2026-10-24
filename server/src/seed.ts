@@ -20,6 +20,7 @@ const READINGS: ReadingDoc[] = [
     description:
       'Read the full essay (about 30 pages). Focus on Thoreau’s argument for when an individual may refuse to obey the law, and come ready to say whether you find it convincing.',
     createdBy: 'u-dana',
+    createdByName: 'Prof. Dana Reyes',
     createdAt: day(1),
   },
   {
@@ -28,6 +29,7 @@ const READINGS: ReadingDoc[] = [
     description:
       '“Of the Liberty of Thought and Discussion.” Identify Mill’s three cases for why silencing an opinion is wrong, and annotate the one you find weakest.',
     createdBy: 'u-dana',
+    createdByName: 'Prof. Dana Reyes',
     createdAt: day(8),
   },
   {
@@ -36,6 +38,7 @@ const READINGS: ReadingDoc[] = [
     description:
       '“Natural Selection.” Pay attention to how Darwin argues from artificial selection by breeders to selection in nature. Where is the analogy strongest, and where does it strain?',
     createdBy: 'u-dana',
+    createdByName: 'Prof. Dana Reyes',
     createdAt: day(15),
   },
 ]

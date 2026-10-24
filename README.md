@@ -38,11 +38,11 @@ Vue ──REST (typed hc client)──▶ Hono ──▶ MongoDB
 
 ## Data model
 
-| Collection    | Shape                                                                                                    | Notes                                                         |
-| ------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `users`       | `{ _id, name, role }`                                                                                    | `role` is `'student' \| 'instructor'`; seeded.                |
-| `readings`    | `{ _id, title, description, createdBy, createdAt }`                                                      | `createdBy` is the instructor's user id. Listed newest first. |
-| `annotations` | `{ _id, readingId, kind: 'root' \| 'reply', parentId, authorId, authorName, body, createdAt, editedAt }` | Indexed on `{readingId, createdAt}` and `parentId`.           |
+| Collection    | Shape                                                                                                    | Notes                                                                                                         |
+| ------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `users`       | `{ _id, name, role }`                                                                                    | `role` is `'student' \| 'instructor'`; seeded.                                                                |
+| `readings`    | `{ _id, title, description, createdBy, createdByName, createdAt }`                                       | `createdBy` is the instructor's user id; `createdByName` is copied on like `authorName`. Listed newest first. |
+| `annotations` | `{ _id, readingId, kind: 'root' \| 'reply', parentId, authorId, authorName, body, createdAt, editedAt }` | Indexed on `{readingId, createdAt}` and `parentId`.                                                           |
 
 - **Roots and replies share one collection.** One query loads a whole discussion; `parentId` links a reply to its root (one level deep).
 - **`authorName` is copied onto each annotation** so rendering a discussion needs no join to `users`. The cost is that a rename wouldn't propagate, which is fine here.

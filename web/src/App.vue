@@ -12,7 +12,6 @@ const onHash = () => (hash.value = location.hash)
 
 const me = computed(() => users.value.find((u) => u._id === currentUserId.value))
 const readingId = computed(() => /^#\/reading\/(.+)$/.exec(hash.value)?.[1] ?? null)
-const nameOf = (id: string) => users.value.find((u) => u._id === id)?.name ?? 'Unknown'
 
 onMounted(async () => {
   window.addEventListener('hashchange', onHash)
@@ -45,8 +44,7 @@ onUnmounted(() => window.removeEventListener('hashchange', onHash))
       :key="`${me._id}:${readingId}`"
       :reading-id="readingId"
       :can-post="me.role === 'student'"
-      :name-of="nameOf"
     />
-    <ReadingList v-else :key="me._id" :can-create="me.role === 'instructor'" :name-of="nameOf" />
+    <ReadingList v-else :key="me._id" :can-create="me.role === 'instructor'" />
   </template>
 </template>

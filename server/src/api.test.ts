@@ -55,6 +55,7 @@ describe('POST /readings', () => {
       title: 'Plato — Apology',
       description: 'Read the whole dialogue.',
       createdBy: 'u-dana',
+      createdByName: 'Prof. Dana Reyes',
     })
     expect(Date.parse(created.createdAt)).not.toBeNaN()
 

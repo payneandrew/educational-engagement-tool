@@ -1,25 +1,31 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { Annotation, FeedActions } from './api'
+import type { Annotation } from './api'
+import { currentUserId } from './session'
+import { useAnnotations } from './useAnnotations'
 
-const props = defineProps<{ post: Annotation; me: string; busy: boolean; actions: FeedActions }>()
+const props = defineProps<{ post: Annotation }>()
+const { busy, edit, remove } = useAnnotations()
 
 const editing = ref(false)
 const editDraft = ref('')
+const error = ref('')
 
 function startEdit() {
   editDraft.value = props.post.body
+  error.value = ''
   editing.value = true
 }
 async function saveEdit() {
-  if (await props.actions.edit(props.post.id, editDraft.value)) editing.value = false
+  error.value = (await edit(props.post.id, editDraft.value)) ?? ''
+  if (!error.value) editing.value = false
 }
-function confirmDelete() {
+async function confirmDelete() {
   const msg =
     props.post.kind === 'root'
       ? 'Delete this annotation and its replies? This can’t be undone.'
       : 'Delete this reply? This can’t be undone.'
-  if (window.confirm(msg)) void props.actions.remove(props.post.id)
+  if (window.confirm(msg)) error.value = (await remove(props.post.id)) ?? ''
 }
 
 const fmt = (iso: string) =>
@@ -32,7 +38,7 @@ const fmt = (iso: string) =>
       <strong class="font-semibold">{{ post.authorName }}</strong>
       <time :datetime="post.createdAt">{{ fmt(post.createdAt) }}</time>
       <span v-if="post.editedAt">(edited)</span>
-      <template v-if="post.authorId === me && !editing">
+      <template v-if="post.authorId === currentUserId && !editing">
         <button data-action="edit" class="btn ml-auto px-1.5 py-0 text-xs" @click="startEdit">
           Edit
         </button>
@@ -51,5 +57,6 @@ const fmt = (iso: string) =>
       </div>
     </form>
     <p v-else class="my-1 whitespace-pre-wrap">{{ post.body }}</p>
+    <p v-if="error" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
   </div>
 </template>

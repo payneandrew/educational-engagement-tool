@@ -1,7 +1,7 @@
+import { HTTPException } from 'hono/http-exception'
 import { ObjectId } from 'mongodb'
 import { annotations, readings } from '../db'
 import type { ReadingDoc, UserDoc } from '../models'
-import { AppError } from './errors'
 
 /** Wire shape for REST. Inferred types flow from here to the Vue app via Hono RPC. */
 export type ReadingDTO = Omit<ReadingDoc, '_id' | 'createdAt'> & { id: string; createdAt: string }
@@ -48,7 +48,7 @@ export async function listReadings() {
 
 export async function getReading(id: string) {
   const d = await readings.findOne({ _id: id })
-  if (!d) throw new AppError(404, 'reading not found')
+  if (!d) throw new HTTPException(404, { message: 'reading not found' })
   return toReadingDTO(d)
 }
 
@@ -62,6 +62,7 @@ export async function createReading(
     title: input.title,
     description: input.description,
     createdBy: instructor._id,
+    createdByName: instructor.name,
     createdAt: new Date(),
   }
   await readings.insertOne(d)

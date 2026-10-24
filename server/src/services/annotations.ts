@@ -1,8 +1,8 @@
+import { HTTPException } from 'hono/http-exception'
 import { ObjectId } from 'mongodb'
 import { annotations, readings } from '../db'
 import { publish } from '../events'
 import type { AnnotationDoc, UserDoc } from '../models'
-import { AppError } from './errors'
 
 /** Wire shape for REST and SSE. Inferred types flow from here to the Vue app via Hono RPC. */
 export type AnnotationDTO = Omit<AnnotationDoc, '_id' | 'createdAt' | 'editedAt'> & {
@@ -39,7 +39,7 @@ const newAnnotation = (
 
 export async function createRoot(user: UserDoc, readingId: string, body: string) {
   if (!(await readings.countDocuments({ _id: readingId }, { limit: 1 })))
-    throw new AppError(404, 'reading not found')
+    throw new HTTPException(404, { message: 'reading not found' })
   const a = newAnnotation(user, { readingId, kind: 'root', parentId: null, body })
   await annotations.insertOne(a)
   return saved(a)
@@ -47,8 +47,9 @@ export async function createRoot(user: UserDoc, readingId: string, body: string)
 
 export async function createReply(user: UserDoc, parentId: string, body: string) {
   const parent = await annotations.findOne({ _id: parentId })
-  if (!parent) throw new AppError(404, 'annotation not found')
-  if (parent.kind !== 'root') throw new AppError(400, 'can only reply to a top-level annotation')
+  if (!parent) throw new HTTPException(404, { message: 'annotation not found' })
+  if (parent.kind !== 'root')
+    throw new HTTPException(400, { message: 'can only reply to a top-level annotation' })
   const a = newAnnotation(user, {
     readingId: parent.readingId,
     kind: 'reply',
@@ -62,8 +63,9 @@ export async function createReply(user: UserDoc, parentId: string, body: string)
 /** Only the author may change a post. */
 async function loadOwn(user: UserDoc, id: string) {
   const a = await annotations.findOne({ _id: id })
-  if (!a) throw new AppError(404, 'annotation not found')
-  if (a.authorId !== user._id) throw new AppError(403, 'only the author can change this annotation')
+  if (!a) throw new HTTPException(404, { message: 'annotation not found' })
+  if (a.authorId !== user._id)
+    throw new HTTPException(403, { message: 'only the author can change this annotation' })
   return a
 }
 
@@ -74,7 +76,7 @@ export async function editAnnotation(user: UserDoc, id: string, body: string) {
     { $set: { body, editedAt: new Date() } },
     { returnDocument: 'after' },
   )
-  if (!updated) throw new AppError(404, 'annotation not found') // deleted between the check and the update
+  if (!updated) throw new HTTPException(404, { message: 'annotation not found' }) // deleted between the check and the update
   return saved(updated)
 }
 

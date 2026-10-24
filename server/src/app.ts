@@ -13,7 +13,6 @@ import {
   editAnnotation,
   listAnnotations,
 } from './services/annotations'
-import { AppError } from './services/errors'
 import { createReading, getReading, listReadings } from './services/readings'
 
 type Env = { Variables: { user: UserDoc } }
@@ -49,7 +48,6 @@ const studentOnly = createMiddleware<Env>(async (c, next) => {
 export const app = new Hono<Env>()
   .basePath('/api')
   .onError((err, c) => {
-    if (err instanceof AppError) return c.json({ error: err.message }, err.status)
     if (err instanceof HTTPException) return c.json({ error: err.message }, err.status)
     console.error(err)
     return c.json({ error: 'internal error' }, 500)

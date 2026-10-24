@@ -11,6 +11,8 @@ export interface ReadingDoc {
   description: string
   /** The instructor's user id. */
   createdBy: string
+  /** Denormalized, like an annotation's authorName: showing a reading never needs a user lookup. */
+  createdByName: string
   createdAt: Date
 }
 
