@@ -3,10 +3,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 // Exercises the HTTP layer (auth + role middleware + validation) via app.request, no server socket needed.
 let mongod: MongoMemoryServer
-let m: { app: typeof import('./app')['app']; db: typeof import('./db') }
+let m: { app: (typeof import('./app'))['app']; db: typeof import('./db') }
 
 const post = (userId: string, json: unknown) =>
-  m.app.request('/api/readings', { method: 'POST', headers: { 'x-user-id': userId, 'content-type': 'application/json' }, body: JSON.stringify(json) })
+  m.app.request('/api/readings', {
+    method: 'POST',
+    headers: { 'x-user-id': userId, 'content-type': 'application/json' },
+    body: JSON.stringify(json),
+  })
 
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create({ binary: { version: '7.0.14' } })
@@ -27,7 +31,7 @@ describe('GET /readings', () => {
       await m.app.request('/api/readings', { headers: { 'x-user-id': 'u-dana' } })
     ).json()
     const stats = (id: string) => {
-      const { annotationCount, studentCount } = list.find(r => r.id === id)!
+      const { annotationCount, studentCount } = list.find((r) => r.id === id)!
       return { annotationCount, studentCount }
     }
     // Seed: Alice's comment with replies from Bob and Carol, plus a comment from Bob.
@@ -39,13 +43,22 @@ describe('GET /readings', () => {
 
 describe('POST /readings', () => {
   it('lets an instructor create a reading, which then lists first', async () => {
-    const res = await post('u-dana', { title: '  Plato — Apology  ', description: 'Read the whole dialogue.' })
+    const res = await post('u-dana', {
+      title: '  Plato — Apology  ',
+      description: 'Read the whole dialogue.',
+    })
     expect(res.status).toBe(201)
     const created = await res.json()
-    expect(created).toMatchObject({ title: 'Plato — Apology', description: 'Read the whole dialogue.', createdBy: 'u-dana' })
+    expect(created).toMatchObject({
+      title: 'Plato — Apology',
+      description: 'Read the whole dialogue.',
+      createdBy: 'u-dana',
+    })
     expect(Date.parse(created.createdAt)).not.toBeNaN()
 
-    const list = await (await m.app.request('/api/readings', { headers: { 'x-user-id': 'u-alice' } })).json()
+    const list = await (
+      await m.app.request('/api/readings', { headers: { 'x-user-id': 'u-alice' } })
+    ).json()
     expect(list[0].id).toBe(created.id)
   })
 

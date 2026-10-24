@@ -14,6 +14,9 @@ const server = await MongoMemoryServer.create({
 })
 console.log(`[db] ready: ${server.getUri()}`)
 
-const stop = async () => { await server.stop({ doCleanup: false }); process.exit(0) }
-process.on('SIGINT', stop)
-process.on('SIGTERM', stop)
+const stop = async () => {
+  await server.stop({ doCleanup: false })
+  process.exit(0)
+}
+process.on('SIGINT', () => void stop())
+process.on('SIGTERM', () => void stop())

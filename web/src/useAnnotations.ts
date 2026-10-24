@@ -34,7 +34,9 @@ export function useAnnotations(documentId: string) {
   async function load() {
     pending = []
     try {
-      const list = await unwrap(await client.api.readings[':id'].annotations.$get({ param: { id: documentId } }))
+      const list = await unwrap(
+        await client.api.readings[':id'].annotations.$get({ param: { id: documentId } }),
+      )
       for (const k of Object.keys(byId)) delete byId[k]
       for (const a of list) byId[a.id] = a
       loadError.value = ''
@@ -57,8 +59,12 @@ export function useAnnotations(documentId: string) {
       connectionLost.value = false
       void load()
     }
-    es.addEventListener('annotation', e => receive({ type: 'annotation', annotation: JSON.parse((e as MessageEvent).data) }))
-    es.addEventListener('deleted', e => receive({ type: 'deleted', ids: JSON.parse((e as MessageEvent).data) }))
+    es.addEventListener('annotation', (e) =>
+      receive({ type: 'annotation', annotation: JSON.parse((e as MessageEvent).data) }),
+    )
+    es.addEventListener('deleted', (e) =>
+      receive({ type: 'deleted', ids: JSON.parse((e as MessageEvent).data) }),
+    )
     es.onerror = () => {
       connectionLost.value = true
       // While CONNECTING the browser retries by itself. If it gave up (CLOSED, e.g. the server answered
@@ -77,13 +83,19 @@ export function useAnnotations(documentId: string) {
   const all = computed(() => Object.values(byId))
   // Replies read as a conversation, oldest first.
   const repliesOf = (rootId: string) =>
-    all.value.filter(a => a.parentId === rootId).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    all.value
+      .filter((a) => a.parentId === rootId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   // Newest first.
-  const roots = computed(() => all.value.filter(a => a.kind === 'root').sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
+  const roots = computed(() =>
+    all.value
+      .filter((a) => a.kind === 'root')
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+  )
 
   const total = computed(() => all.value.length)
   // Only students can post, so distinct authors = students participating.
-  const studentCount = computed(() => new Set(all.value.map(a => a.authorId)).size)
+  const studentCount = computed(() => new Set(all.value.map((a) => a.authorId)).size)
 
   // `apply` is for the results of this user's own writes: same path as live events, so the same ordering rules hold.
   return { roots, repliesOf, total, studentCount, apply: receive, connectionLost, loadError }

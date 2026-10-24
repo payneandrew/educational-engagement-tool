@@ -1,23 +1,36 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { client, unwrap, type FeedActions, type ReadingDetail } from './api'
-import { plural } from './format'
 import AnnotationFeed from './AnnotationFeed.vue'
 import { currentUserId } from './session'
 import { useAnnotations } from './useAnnotations'
 
-const props = defineProps<{ documentId: string; canPost: boolean; nameOf: (userId: string) => string }>()
+const props = defineProps<{
+  documentId: string
+  canPost: boolean
+  nameOf: (userId: string) => string
+}>()
 
 const doc = ref<ReadingDetail | null>(null)
 const loadError = ref('')
-const { apply, roots, repliesOf, total, studentCount, connectionLost, loadError: annotationsError } = useAnnotations(props.documentId)
+const {
+  apply,
+  roots,
+  repliesOf,
+  total,
+  studentCount,
+  connectionLost,
+  loadError: annotationsError,
+} = useAnnotations(props.documentId)
 
 const busy = ref(false)
 const error = ref('')
 
 onMounted(async () => {
   try {
-    doc.value = await unwrap(await client.api.readings[':id'].$get({ param: { id: props.documentId } }))
+    doc.value = await unwrap(
+      await client.api.readings[':id'].$get({ param: { id: props.documentId } }),
+    )
   } catch (e) {
     loadError.value = (e as Error).message
   }
@@ -42,22 +55,34 @@ async function run(fn: () => Promise<void>) {
 }
 
 const actions: FeedActions = {
-  create: body =>
+  create: (body) =>
     run(async () => {
-      const annotation = await unwrap(await client.api.readings[':id'].annotations.$post({ param: { id: props.documentId }, json: { body } }))
+      const annotation = await unwrap(
+        await client.api.readings[':id'].annotations.$post({
+          param: { id: props.documentId },
+          json: { body },
+        }),
+      )
       apply({ type: 'annotation', annotation })
     }),
   reply: (rootId, body) =>
     run(async () => {
-      const annotation = await unwrap(await client.api.annotations[':id'].replies.$post({ param: { id: rootId }, json: { body } }))
+      const annotation = await unwrap(
+        await client.api.annotations[':id'].replies.$post({
+          param: { id: rootId },
+          json: { body },
+        }),
+      )
       apply({ type: 'annotation', annotation })
     }),
   edit: (id, body) =>
     run(async () => {
-      const annotation = await unwrap(await client.api.annotations[':id'].$patch({ param: { id }, json: { body } }))
+      const annotation = await unwrap(
+        await client.api.annotations[':id'].$patch({ param: { id }, json: { body } }),
+      )
       apply({ type: 'annotation', annotation })
     }),
-  remove: id =>
+  remove: (id) =>
     run(async () => {
       const { ids } = await unwrap(await client.api.annotations[':id'].$delete({ param: { id } }))
       apply({ type: 'deleted', ids })
@@ -72,13 +97,22 @@ const actions: FeedActions = {
     <template v-if="doc">
       <article class="card reading">
         <h2>{{ doc.title }}</h2>
-        <small>Assigned by {{ nameOf(doc.createdBy) }} · {{ new Date(doc.createdAt).toLocaleDateString([], { dateStyle: 'medium' }) }}</small>
+        <small>
+          Assigned by {{ nameOf(doc.createdBy) }} ·
+          {{ new Date(doc.createdAt).toLocaleDateString([], { dateStyle: 'medium' }) }}</small
+        >
         <p>{{ doc.description }}</p>
       </article>
       <!-- Instructor overview: counts come from the live feed, so they update as students post. -->
       <dl v-if="!canPost" class="stats">
-        <div><dt>Annotations</dt><dd>{{ total }}</dd></div>
-        <div><dt>Students participating</dt><dd>{{ studentCount }}</dd></div>
+        <div>
+          <dt>Annotations</dt>
+          <dd>{{ total }}</dd>
+        </div>
+        <div>
+          <dt>Students participating</dt>
+          <dd>{{ studentCount }}</dd>
+        </div>
       </dl>
       <p v-if="connectionLost" class="notice" role="status">
         Connection lost — reconnecting. New annotations may be delayed.

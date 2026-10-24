@@ -2,7 +2,8 @@ import { EventEmitter } from 'node:events'
 import type { AnnotationDTO } from './services/annotations'
 
 /** What viewers of a reading are told after a write. */
-export type AnnotationEvent = { type: 'annotation'; annotation: AnnotationDTO } | { type: 'deleted'; ids: string[] }
+export type AnnotationEvent =
+  { type: 'annotation'; annotation: AnnotationDTO } | { type: 'deleted'; ids: string[] }
 
 /**
  * In-process pub/sub, one channel per reading (the event name is the documentId). The annotation
@@ -14,7 +15,8 @@ export type AnnotationEvent = { type: 'annotation'; annotation: AnnotationDTO } 
 const bus = new EventEmitter()
 bus.setMaxListeners(0) // one listener per open stream; the default cap of 10 would just print warnings
 
-export const publish = (documentId: string, event: AnnotationEvent) => void bus.emit(documentId, event)
+export const publish = (documentId: string, event: AnnotationEvent) =>
+  void bus.emit(documentId, event)
 
 /** Returns the unsubscribe function. */
 export function subscribe(documentId: string, listener: (event: AnnotationEvent) => void) {
@@ -22,4 +24,5 @@ export function subscribe(documentId: string, listener: (event: AnnotationEvent)
   return () => void bus.off(documentId, listener)
 }
 
-export const subscriberCount = () => bus.eventNames().reduce((n, name) => n + bus.listenerCount(name), 0)
+export const subscriberCount = () =>
+  bus.eventNames().reduce((n, name) => n + bus.listenerCount(name), 0)

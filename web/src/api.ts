@@ -6,7 +6,9 @@ import { currentUserId } from './session'
  * The entire API surface, typed from the server's route chain. There is nothing to keep in sync:
  * change a route or validator on the server and every call below re-checks at compile time.
  */
-export const client = hc<AppType>(location.origin, { headers: () => ({ 'x-user-id': currentUserId.value }) })
+export const client = hc<AppType>(location.origin, {
+  headers: () => ({ 'x-user-id': currentUserId.value }),
+})
 
 /** Drops the typed `{ error }` failure variants, leaving the success shape. */
 type Ok<T> = Exclude<T, { error: string }>
@@ -15,7 +17,9 @@ type Ok<T> = Exclude<T, { error: string }>
 /** A reading as listed, with its activity counts. */
 export type Reading = Ok<InferResponseType<typeof client.api.readings.$get>>[number]
 export type ReadingDetail = Ok<InferResponseType<(typeof client.api.readings)[':id']['$get']>>
-export type Annotation = Ok<InferResponseType<(typeof client.api.readings)[':id']['annotations']['$get']>>[number]
+export type Annotation = Ok<
+  InferResponseType<(typeof client.api.readings)[':id']['annotations']['$get']>
+>[number]
 
 /** Mutations the discussion UI can trigger. Each resolves true on success, so the caller knows to clear its draft. */
 export interface FeedActions {
@@ -26,10 +30,16 @@ export interface FeedActions {
 }
 
 /** Unwraps a Response, throwing the server's `{ error }` message on non-2xx. */
-export async function unwrap<R extends { ok: boolean; status: number; json(): Promise<any> }>(
+export async function unwrap<R extends { ok: boolean; status: number; json(): Promise<unknown> }>(
   res: R,
 ): Promise<Ok<Awaited<ReturnType<R['json']>>>> {
   const body = await res.json()
-  if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`)
-  return body
+  if (!res.ok) throw new Error(errorMessage(body) ?? `HTTP ${res.status}`)
+  // On success the body is whatever the route returned; R['json'] carries that type from the server.
+  return body as Ok<Awaited<ReturnType<R['json']>>>
 }
+
+const errorMessage = (body: unknown) =>
+  body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
+    ? body.error
+    : undefined

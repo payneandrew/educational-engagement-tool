@@ -21,7 +21,6 @@ const draft = ref('')
 const replyingTo = ref<string | null>(null)
 const replyDraft = ref('')
 
-
 async function post() {
   if (await props.actions.create(draft.value)) draft.value = ''
 }
@@ -47,20 +46,33 @@ async function sendReply(rootId: string) {
     <div class="err">{{ error }}</div>
 
     <p v-if="!roots.length" class="empty">
-      {{ canPost ? 'No annotations yet. Start the discussion.' : 'No students have annotated this reading yet.' }}
+      {{
+        canPost
+          ? 'No annotations yet. Start the discussion.'
+          : 'No students have annotated this reading yet.'
+      }}
     </p>
 
     <div v-for="root in roots" :key="root.id" class="thread">
       <AnnotationPost :post="root" :me="me" :busy="busy" :actions="actions" />
       <div class="replies">
-        <AnnotationPost v-for="r in repliesOf(root.id)" :key="r.id" :post="r" :me="me" :busy="busy" :actions="actions" />
+        <AnnotationPost
+          v-for="r in repliesOf(root.id)"
+          :key="r.id"
+          :post="r"
+          :me="me"
+          :busy="busy"
+          :actions="actions"
+        />
       </div>
       <template v-if="canPost">
         <form v-if="replyingTo === root.id" class="replies" @submit.prevent="sendReply(root.id)">
           <textarea v-model="replyDraft" rows="2" placeholder="Reply…" />
           <div class="row end">
             <button type="button" @click="replyingTo = null">Cancel</button>
-            <button class="primary" type="submit" :disabled="busy || !replyDraft.trim()">Reply</button>
+            <button class="primary" type="submit" :disabled="busy || !replyDraft.trim()">
+              Reply
+            </button>
           </div>
         </form>
         <button v-else class="link" @click="startReply(root.id)">Reply</button>

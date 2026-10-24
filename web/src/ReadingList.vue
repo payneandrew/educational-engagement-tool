@@ -32,7 +32,11 @@ async function create() {
   busy.value = true
   formError.value = ''
   try {
-    const created = await unwrap(await client.api.readings.$post({ json: { title: title.value, description: description.value } }))
+    const created = await unwrap(
+      await client.api.readings.$post({
+        json: { title: title.value, description: description.value },
+      }),
+    )
     readings.value = [created, ...(readings.value ?? [])] // the list is newest first
     success.value = `“${created.title}” has been assigned.`
     title.value = ''
@@ -52,28 +56,52 @@ const fmt = (iso: string) => new Date(iso).toLocaleDateString([], { dateStyle: '
   <div class="page narrow">
     <div class="row">
       <h2 class="spacer">Readings</h2>
-      <button v-if="props.canCreate && !formOpen" class="primary" @click="openForm">New reading</button>
+      <button v-if="props.canCreate && !formOpen" class="primary" @click="openForm">
+        New reading
+      </button>
     </div>
 
     <p v-if="success" class="success" role="status">{{ success }}</p>
 
     <form v-if="formOpen" class="card form" @submit.prevent="create">
-      <label>Title
-        <input v-model="title" maxlength="200" placeholder="e.g. Mill — On Liberty, Chapter 2" autofocus />
+      <label>
+        Title
+        <input
+          v-model="title"
+          maxlength="200"
+          placeholder="e.g. Mill — On Liberty, Chapter 2"
+          autofocus
+        />
       </label>
-      <label>Description
-        <textarea v-model="description" rows="4" maxlength="5000" placeholder="What should students read, and what should they focus on?" />
+      <label>
+        Description
+        <textarea
+          v-model="description"
+          rows="4"
+          maxlength="5000"
+          placeholder="What should students read, and what should they focus on?"
+        />
       </label>
       <div class="err">{{ formError }}</div>
       <div class="row end">
         <button type="button" @click="formOpen = false">Cancel</button>
-        <button class="primary" type="submit" :disabled="busy || !title.trim() || !description.trim()">Create reading</button>
+        <button
+          class="primary"
+          type="submit"
+          :disabled="busy || !title.trim() || !description.trim()"
+        >
+          Create reading
+        </button>
       </div>
     </form>
 
     <p v-if="loadError" class="err">{{ loadError }}</p>
     <p v-else-if="readings && !readings.length" class="empty">
-      {{ canCreate ? 'No readings yet. Create one to get your students started.' : 'No readings have been assigned yet.' }}
+      {{
+        canCreate
+          ? 'No readings yet. Create one to get your students started.'
+          : 'No readings have been assigned yet.'
+      }}
     </p>
     <ul v-else class="doc-list">
       <li v-for="r in readings" :key="r.id">
@@ -83,7 +111,9 @@ const fmt = (iso: string) => new Date(iso).toLocaleDateString([], { dateStyle: '
           <small>
             Assigned by {{ nameOf(r.createdBy) }} · {{ fmt(r.createdAt) }} ·
             <span class="count">{{ plural(r.annotationCount, 'annotation') }}</span>
-            <template v-if="canCreate"> · {{ plural(r.studentCount, 'student') }} participating</template>
+            <template v-if="canCreate">
+              · {{ plural(r.studentCount, 'student') }} participating</template
+            >
           </small>
         </a>
       </li>

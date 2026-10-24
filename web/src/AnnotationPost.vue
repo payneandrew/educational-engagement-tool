@@ -15,11 +15,15 @@ async function saveEdit() {
   if (await props.actions.edit(props.post.id, editDraft.value)) editing.value = false
 }
 function confirmDelete() {
-  const msg = props.post.kind === 'root' ? 'Delete this annotation and its replies? This can’t be undone.' : 'Delete this reply? This can’t be undone.'
+  const msg =
+    props.post.kind === 'root'
+      ? 'Delete this annotation and its replies? This can’t be undone.'
+      : 'Delete this reply? This can’t be undone.'
   if (window.confirm(msg)) void props.actions.remove(props.post.id)
 }
 
-const fmt = (iso: string) => new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+const fmt = (iso: string) =>
+  new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
 </script>
 
 <template>

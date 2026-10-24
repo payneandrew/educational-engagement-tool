@@ -25,7 +25,10 @@ function saved(a: AnnotationDoc) {
   return dto
 }
 
-const newAnnotation = (user: UserDoc, fields: Pick<AnnotationDoc, 'documentId' | 'kind' | 'parentId' | 'body'>): AnnotationDoc => ({
+const newAnnotation = (
+  user: UserDoc,
+  fields: Pick<AnnotationDoc, 'documentId' | 'kind' | 'parentId' | 'body'>,
+): AnnotationDoc => ({
   _id: new ObjectId().toHexString(),
   ...fields,
   authorId: user._id,
@@ -35,7 +38,8 @@ const newAnnotation = (user: UserDoc, fields: Pick<AnnotationDoc, 'documentId' |
 })
 
 export async function createRoot(user: UserDoc, documentId: string, body: string) {
-  if (!(await documents.countDocuments({ _id: documentId }, { limit: 1 }))) throw new AppError(404, 'reading not found')
+  if (!(await documents.countDocuments({ _id: documentId }, { limit: 1 })))
+    throw new AppError(404, 'reading not found')
   const a = newAnnotation(user, { documentId, kind: 'root', parentId: null, body })
   await annotations.insertOne(a)
   return saved(a)
@@ -45,7 +49,12 @@ export async function createReply(user: UserDoc, parentId: string, body: string)
   const parent = await annotations.findOne({ _id: parentId })
   if (!parent) throw new AppError(404, 'annotation not found')
   if (parent.kind !== 'root') throw new AppError(400, 'can only reply to a top-level annotation')
-  const a = newAnnotation(user, { documentId: parent.documentId, kind: 'reply', parentId: parent._id, body })
+  const a = newAnnotation(user, {
+    documentId: parent.documentId,
+    kind: 'reply',
+    parentId: parent._id,
+    body,
+  })
   await annotations.insertOne(a)
   return saved(a)
 }
@@ -60,7 +69,11 @@ async function loadOwn(user: UserDoc, id: string) {
 
 export async function editAnnotation(user: UserDoc, id: string, body: string) {
   await loadOwn(user, id)
-  const updated = await annotations.findOneAndUpdate({ _id: id }, { $set: { body, editedAt: new Date() } }, { returnDocument: 'after' })
+  const updated = await annotations.findOneAndUpdate(
+    { _id: id },
+    { $set: { body, editedAt: new Date() } },
+    { returnDocument: 'after' },
+  )
   if (!updated) throw new AppError(404, 'annotation not found') // deleted between the check and the update
   return saved(updated)
 }
@@ -68,7 +81,12 @@ export async function editAnnotation(user: UserDoc, id: string, body: string) {
 /** Deleting a top-level annotation deletes its replies too: a thread without its opening comment has no context. */
 export async function deleteAnnotation(user: UserDoc, id: string) {
   const a = await loadOwn(user, id)
-  const replyIds = a.kind === 'root' ? (await annotations.find({ parentId: id }, { projection: { _id: 1 } }).toArray()).map(r => r._id) : []
+  const replyIds =
+    a.kind === 'root'
+      ? (await annotations.find({ parentId: id }, { projection: { _id: 1 } }).toArray()).map(
+          (r) => r._id,
+        )
+      : []
   const ids = [id, ...replyIds]
   await annotations.deleteMany({ _id: { $in: ids } })
   publish(a.documentId, { type: 'deleted', ids })

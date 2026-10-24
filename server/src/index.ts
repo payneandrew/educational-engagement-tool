@@ -11,12 +11,14 @@ if ((await documents.countDocuments()) === 0) {
   await seed()
 }
 
-const server = serve({ fetch: app.fetch, port }, i => console.log(`[api] listening on http://localhost:${i.port}`))
+const server = serve({ fetch: app.fetch, port }, (i) =>
+  console.log(`[api] listening on http://localhost:${i.port}`),
+)
 
 const shutdown = async () => {
   server.close()
   await mongo.close()
   process.exit(0)
 }
-process.on('SIGINT', shutdown)
-process.on('SIGTERM', shutdown)
+process.on('SIGINT', () => void shutdown())
+process.on('SIGTERM', () => void shutdown())

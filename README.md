@@ -20,7 +20,7 @@ Open http://localhost:5173 and use **Viewing as** to pick a user:
 
 The choice is per tab (`sessionStorage`), so open Alice and Bob in two tabs to watch annotations appear live.
 
-Other commands: `npm run seed` resets the database to the sample data (in `server/src/seed.ts`), `npm test` runs the tests, `npm run typecheck` checks server and web together. To use your own MongoDB, set `MONGO_URI` and run `npm run dev:api` and `npm run dev:web` instead of `npm run dev`.
+Other commands: `npm run seed` resets the database to the sample data (in `server/src/seed.ts`), `npm test` runs the tests, `npm run typecheck` checks server and web together. `npm run lint` runs ESLint (config follows the `create-vue` defaults for Vue + TypeScript + Vitest, plus typescript-eslint's rules against unhandled promises) and `npm run format` applies Prettier; `lint:fix` and `format:check` also exist. To use your own MongoDB, set `MONGO_URI` and run `npm run dev:api` and `npm run dev:web` instead of `npm run dev`.
 
 ## How it works
 
@@ -38,11 +38,11 @@ Vue ──REST (typed hc client)──▶ Hono ──▶ MongoDB
 
 ## Data model
 
-| Collection | Shape | Notes |
-|---|---|---|
-| `users` | `{ _id, name, role }` | `role` is `'student' \| 'instructor'`; seeded. |
-| `documents` | `{ _id, title, description, createdBy, createdAt }` | The readings. `createdBy` is the instructor's user id. Listed newest first. |
-| `annotations` | `{ _id, documentId, kind: 'root' \| 'reply', parentId, authorId, authorName, body, createdAt, editedAt }` | Indexed on `{documentId, createdAt}` and `parentId`. |
+| Collection    | Shape                                                                                                     | Notes                                                                       |
+| ------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `users`       | `{ _id, name, role }`                                                                                     | `role` is `'student' \| 'instructor'`; seeded.                              |
+| `documents`   | `{ _id, title, description, createdBy, createdAt }`                                                       | The readings. `createdBy` is the instructor's user id. Listed newest first. |
+| `annotations` | `{ _id, documentId, kind: 'root' \| 'reply', parentId, authorId, authorName, body, createdAt, editedAt }` | Indexed on `{documentId, createdAt}` and `parentId`.                        |
 
 - **Roots and replies share one collection.** One query loads a whole discussion; `parentId` links a reply to its root (one level deep).
 - **`authorName` is copied onto each annotation** so rendering a discussion needs no join to `users`. The cost is that a rename wouldn't propagate, which is fine here.
