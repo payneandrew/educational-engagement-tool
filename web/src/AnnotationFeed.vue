@@ -14,7 +14,7 @@ const visibleRoots = computed(() => {
   const id = studentFilter.value
   if (!id) return roots.value
   return roots.value.filter(
-    (root) => root.authorId === id || repliesOf(root.id).some((r) => r.authorId === id),
+    (root) => root.authorId === id || repliesOf(root.id).some((reply) => reply.authorId === id),
   )
 })
 
@@ -49,8 +49,8 @@ async function sendReply(rootId: string) {
         Student
         <select v-model="studentFilter" class="field w-auto py-1 text-sm">
           <option value="">All students</option>
-          <option v-for="s in authors" :key="s.id" :value="s.id">
-            {{ s.name }} ({{ s.count }})
+          <option v-for="author in authors" :key="author.id" :value="author.id">
+            {{ author.name }} ({{ author.count }})
           </option>
         </select>
       </label>
@@ -82,10 +82,10 @@ async function sendReply(rootId: string) {
       <AnnotationPost :post="root" :highlight="root.authorId === studentFilter" />
       <div v-if="repliesOf(root.id).length" class="ml-3.5 border-l-2 border-line pl-2.5">
         <AnnotationPost
-          v-for="r in repliesOf(root.id)"
-          :key="r.id"
-          :post="r"
-          :highlight="r.authorId === studentFilter"
+          v-for="reply in repliesOf(root.id)"
+          :key="reply.id"
+          :post="reply"
+          :highlight="reply.authorId === studentFilter"
         />
       </div>
       <template v-if="canPost">

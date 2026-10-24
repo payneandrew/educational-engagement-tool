@@ -29,9 +29,9 @@ async function errorMessage(res: { status: number; json(): Promise<unknown> }) {
 }
 
 /** A message to show the user for anything an API call can throw. */
-export function messageOf(e: unknown) {
+export function messageOf(error: unknown) {
   // fetch() rejects with a TypeError when the server can't be reached at all.
-  if (e instanceof TypeError)
+  if (error instanceof TypeError)
     return "Couldn't reach the server. Check your connection and try again."
-  return e instanceof Error ? e.message : String(e)
+  return error instanceof Error ? error.message : String(error)
 }

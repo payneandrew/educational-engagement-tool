@@ -13,6 +13,7 @@ import {
   editAnnotation,
   listAnnotations,
 } from './services/annotations'
+import { participation } from './services/participation'
 import { createReading, getReading, listReadings } from './services/readings'
 
 type Env = { Variables: { user: UserDoc } }
@@ -30,7 +31,7 @@ const auth = createMiddleware<Env>(async (c, next) => {
 // Anyone can read. Only instructors create readings, and only students write annotations.
 const instructorOnly = createMiddleware<Env>(async (c, next) => {
   if (c.get('user').role !== 'instructor')
-    throw new HTTPException(403, { message: 'only instructors can create readings' })
+    throw new HTTPException(403, { message: 'only instructors can do this' })
   await next()
 })
 const studentOnly = createMiddleware<Env>(async (c, next) => {
@@ -47,13 +48,14 @@ const studentOnly = createMiddleware<Env>(async (c, next) => {
  */
 export const app = new Hono<Env>()
   .basePath('/api')
-  .onError((err, c) => {
-    if (err instanceof HTTPException) return c.json({ error: err.message }, err.status)
-    console.error(err)
+  .onError((error, c) => {
+    if (error instanceof HTTPException) return c.json({ error: error.message }, error.status)
+    console.error(error)
     return c.json({ error: 'Something went wrong on the server. Please try again.' }, 500)
   })
   .use('/readings/*', auth)
   .use('/annotations/*', auth)
+  .use('/participation', auth)
 
   // Seeded identities for the user-switcher (stand-in for login).
   .get('/users', async (c) => {
@@ -62,6 +64,9 @@ export const app = new Hono<Env>()
   })
 
   .get('/readings', async (c) => c.json(await listReadings()))
+
+  // The instructor's dashboard: every student's annotation count on every reading.
+  .get('/participation', instructorOnly, async (c) => c.json(await participation()))
 
   .post('/readings', instructorOnly, validate('json', readingSchema), async (c) =>
     c.json(await createReading(c.get('user'), c.req.valid('json')), 201),

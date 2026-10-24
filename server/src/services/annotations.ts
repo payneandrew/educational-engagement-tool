@@ -19,9 +19,9 @@ export const toDTO = ({ _id, createdAt, editedAt, ...rest }: AnnotationDoc): Ann
 })
 
 /** Every write tells the reading's live viewers what changed, after it has been saved. */
-function saved(a: AnnotationDoc) {
-  const dto = toDTO(a)
-  publish(a.readingId, { type: 'annotation', annotation: dto })
+function saved(annotation: AnnotationDoc) {
+  const dto = toDTO(annotation)
+  publish(annotation.readingId, { type: 'annotation', annotation: dto })
   return dto
 }
 
@@ -40,9 +40,9 @@ const newAnnotation = (
 export async function createRoot(user: UserDoc, readingId: string, body: string) {
   if (!(await readings.countDocuments({ _id: readingId }, { limit: 1 })))
     throw new HTTPException(404, { message: 'reading not found' })
-  const a = newAnnotation(user, { readingId, kind: 'root', parentId: null, body })
-  await annotations.insertOne(a)
-  return saved(a)
+  const annotation = newAnnotation(user, { readingId, kind: 'root', parentId: null, body })
+  await annotations.insertOne(annotation)
+  return saved(annotation)
 }
 
 export async function createReply(user: UserDoc, parentId: string, body: string) {
@@ -50,23 +50,23 @@ export async function createReply(user: UserDoc, parentId: string, body: string)
   if (!parent) throw new HTTPException(404, { message: 'annotation not found' })
   if (parent.kind !== 'root')
     throw new HTTPException(400, { message: 'can only reply to a top-level annotation' })
-  const a = newAnnotation(user, {
+  const annotation = newAnnotation(user, {
     readingId: parent.readingId,
     kind: 'reply',
     parentId: parent._id,
     body,
   })
-  await annotations.insertOne(a)
-  return saved(a)
+  await annotations.insertOne(annotation)
+  return saved(annotation)
 }
 
 /** Only the author may change a post. */
 async function loadOwn(user: UserDoc, id: string) {
-  const a = await annotations.findOne({ _id: id })
-  if (!a) throw new HTTPException(404, { message: 'annotation not found' })
-  if (a.authorId !== user._id)
+  const annotation = await annotations.findOne({ _id: id })
+  if (!annotation) throw new HTTPException(404, { message: 'annotation not found' })
+  if (annotation.authorId !== user._id)
     throw new HTTPException(403, { message: 'only the author can change this annotation' })
-  return a
+  return annotation
 }
 
 export async function editAnnotation(user: UserDoc, id: string, body: string) {
@@ -86,9 +86,9 @@ export async function editAnnotation(user: UserDoc, id: string, body: string) {
  * The event carries only this id; clients drop its replies themselves, since they know each parentId.
  */
 export async function deleteAnnotation(user: UserDoc, id: string) {
-  const a = await loadOwn(user, id)
+  const annotation = await loadOwn(user, id)
   await annotations.deleteMany({ $or: [{ _id: id }, { parentId: id }] })
-  publish(a.readingId, { type: 'deleted', id })
+  publish(annotation.readingId, { type: 'deleted', id })
   return { id }
 }
 

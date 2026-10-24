@@ -15,7 +15,7 @@ export const validate = <T extends z.ZodType, Target extends keyof ValidationTar
       return c.json(
         {
           error: result.error.issues
-            .map((i) => `${i.path.join('.') || target}: ${i.message}`)
+            .map((issue) => `${issue.path.join('.') || target}: ${issue.message}`)
             .join('; '),
         },
         400,

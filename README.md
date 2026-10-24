@@ -15,7 +15,7 @@ npm run dev        # MongoDB (:27018) + API (:3001) + web (:5173); sample data i
 
 Open http://localhost:5173 and use **Viewing as** to pick a user:
 
-- **Prof. Dana Reyes** (instructor): create readings with **New reading**, see each reading's annotation count and number of participating students, and read every discussion, optionally filtered to one student's threads (their posts are highlighted).
+- **Prof. Dana Reyes** (instructor): create readings with **New reading**, see each reading's annotation count and number of participating students, and read every discussion, optionally filtered to one student's threads (their posts are highlighted). **Participation** shows every student's annotation count on every reading, flagging students who haven't posted anywhere.
 - **Alice, Bob, Carol** (students): browse readings (each shows its annotation count), post annotations, reply, and edit/delete your own.
 
 The choice is per tab (`sessionStorage`), so open Alice and Bob in two tabs to watch annotations appear live.

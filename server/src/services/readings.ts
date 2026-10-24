@@ -43,13 +43,16 @@ export async function listReadings() {
     readings.find().sort({ createdAt: -1 }).toArray(),
     statsByReading(),
   ])
-  return list.map((d) => ({ ...toReadingDTO(d), ...(stats.get(d._id) ?? NO_ACTIVITY) }))
+  return list.map((reading) => ({
+    ...toReadingDTO(reading),
+    ...(stats.get(reading._id) ?? NO_ACTIVITY),
+  }))
 }
 
 export async function getReading(id: string) {
-  const d = await readings.findOne({ _id: id })
-  if (!d) throw new HTTPException(404, { message: 'reading not found' })
-  return toReadingDTO(d)
+  const reading = await readings.findOne({ _id: id })
+  if (!reading) throw new HTTPException(404, { message: 'reading not found' })
+  return toReadingDTO(reading)
 }
 
 /** Callers must already have checked the user is an instructor (the route's `instructorOnly`). */
@@ -57,7 +60,7 @@ export async function createReading(
   instructor: UserDoc,
   input: { title: string; description: string },
 ) {
-  const d: ReadingDoc = {
+  const reading: ReadingDoc = {
     _id: new ObjectId().toHexString(),
     title: input.title,
     description: input.description,
@@ -65,6 +68,6 @@ export async function createReading(
     createdByName: instructor.name,
     createdAt: new Date(),
   }
-  await readings.insertOne(d)
-  return { ...toReadingDTO(d), ...NO_ACTIVITY } // same shape as a list entry, so the client can add it straight to the list
+  await readings.insertOne(reading)
+  return { ...toReadingDTO(reading), ...NO_ACTIVITY } // same shape as a list entry, so the client can add it straight to the list
 }

@@ -11,8 +11,8 @@ if ((await readings.countDocuments()) === 0) {
   await seed()
 }
 
-const server = serve({ fetch: app.fetch, port }, (i) =>
-  console.log(`[api] listening on http://localhost:${i.port}`),
+const server = serve({ fetch: app.fetch, port }, (info) =>
+  console.log(`[api] listening on http://localhost:${info.port}`),
 )
 
 const shutdown = async () => {

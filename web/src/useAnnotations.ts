@@ -19,21 +19,22 @@ function createAnnotations(readingId: string) {
   const loadError = ref('')
   /** True until the first load finishes. Reloads after a reconnect keep showing the current list. */
   const loading = ref(true)
-  let es: EventSource | undefined
+  let eventSource: EventSource | undefined
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let disposed = false
   let pending: AnnotationEvent[] | null = null // non-null while a load is in flight
 
-  function applyEvent(c: AnnotationEvent) {
-    if (c.type === 'annotation') byId[c.annotation.id] = c.annotation
+  function applyEvent(event: AnnotationEvent) {
+    if (event.type === 'annotation') byId[event.annotation.id] = event.annotation
     // Deleting a top-level annotation also deleted its replies.
     else
-      for (const a of Object.values(byId))
-        if (a.id === c.id || a.parentId === c.id) delete byId[a.id]
+      for (const annotation of Object.values(byId))
+        if (annotation.id === event.id || annotation.parentId === event.id)
+          delete byId[annotation.id]
   }
-  function receive(c: AnnotationEvent) {
-    if (pending) pending.push(c)
-    else applyEvent(c)
+  function receive(event: AnnotationEvent) {
+    if (pending) pending.push(event)
+    else applyEvent(event)
   }
 
   async function load() {
@@ -42,11 +43,11 @@ function createAnnotations(readingId: string) {
       const list = await unwrap(
         await client.api.readings[':id'].annotations.$get({ param: { id: readingId } }),
       )
-      for (const k of Object.keys(byId)) delete byId[k]
-      for (const a of list) byId[a.id] = a
+      for (const id of Object.keys(byId)) delete byId[id]
+      for (const annotation of list) byId[annotation.id] = annotation
       loadError.value = ''
-    } catch (e) {
-      loadError.value = messageOf(e)
+    } catch (error) {
+      loadError.value = messageOf(error)
     } finally {
       loading.value = false
       const queued = pending
@@ -60,25 +61,26 @@ function createAnnotations(readingId: string) {
     // EventSource can't send headers, so the user id goes in the query string.
     const url = client.api.readings[':id'].stream.$url({ param: { id: readingId } })
     url.searchParams.set('uid', currentUserId.value)
-    es = new EventSource(url)
-    es.onopen = () => {
+    eventSource = new EventSource(url)
+    eventSource.onopen = () => {
       connectionLost.value = false
       void load()
     }
     // Each message is one AnnotationEvent, serialized by the server's stream route.
-    es.onmessage = (e: MessageEvent<string>) => receive(JSON.parse(e.data) as AnnotationEvent)
-    es.onerror = () => {
+    eventSource.onmessage = (message: MessageEvent<string>) =>
+      receive(JSON.parse(message.data) as AnnotationEvent)
+    eventSource.onerror = () => {
       connectionLost.value = true
       // While CONNECTING the browser retries by itself. If it gave up (CLOSED, e.g. the server answered
       // with an error status), open a fresh stream ourselves.
-      if (es?.readyState === EventSource.CLOSED) retryTimer = setTimeout(connect, 3000)
+      if (eventSource?.readyState === EventSource.CLOSED) retryTimer = setTimeout(connect, 3000)
     }
   }
   connect()
 
   onScopeDispose(() => {
     disposed = true
-    es?.close()
+    eventSource?.close()
     clearTimeout(retryTimer)
   })
 
@@ -86,25 +88,26 @@ function createAnnotations(readingId: string) {
   // Replies read as a conversation, oldest first.
   const repliesOf = (rootId: string) =>
     all.value
-      .filter((a) => a.parentId === rootId)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .filter((annotation) => annotation.parentId === rootId)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
   // Newest first.
   const roots = computed(() =>
     all.value
-      .filter((a) => a.kind === 'root')
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+      .filter((annotation) => annotation.kind === 'root')
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
   )
 
   const total = computed(() => all.value.length)
   /** Everyone who has posted here, with how many annotations each, sorted by name. */
   const authors = computed(() => {
-    const byId = new Map<string, { id: string; name: string; count: number }>()
-    for (const a of all.value) {
-      const author = byId.get(a.authorId) ?? { id: a.authorId, name: a.authorName, count: 0 }
+    const authorsById = new Map<string, { id: string; name: string; count: number }>()
+    for (const annotation of all.value) {
+      const { authorId, authorName } = annotation
+      const author = authorsById.get(authorId) ?? { id: authorId, name: authorName, count: 0 }
       author.count++
-      byId.set(a.authorId, author)
+      authorsById.set(authorId, author)
     }
-    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
+    return [...authorsById.values()].sort((left, right) => left.name.localeCompare(right.name))
   })
   // Only students can post, so the authors are the students participating.
   const studentCount = computed(() => authors.value.length)
@@ -122,8 +125,8 @@ function createAnnotations(readingId: string) {
     try {
       receive(await request())
       return null
-    } catch (e) {
-      return messageOf(e)
+    } catch (error) {
+      return messageOf(error)
     } finally {
       busy.value = false
     }

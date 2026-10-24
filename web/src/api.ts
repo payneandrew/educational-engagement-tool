@@ -20,6 +20,8 @@ export type User = Ok<InferResponseType<typeof client.api.users.$get>>[number]
 /** A reading as listed, with its activity counts. */
 export type Reading = Ok<InferResponseType<typeof client.api.readings.$get>>[number]
 export type ReadingDetail = Ok<InferResponseType<(typeof client.api.readings)[':id']['$get']>>
+/** The instructor dashboard: every student's annotation count per reading. */
+export type Participation = Ok<InferResponseType<typeof client.api.participation.$get>>
 export type Annotation = Ok<
   InferResponseType<(typeof client.api.readings)[':id']['annotations']['$get']>
 >[number]

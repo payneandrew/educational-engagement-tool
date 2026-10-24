@@ -18,8 +18,8 @@ const success = ref('')
 onMounted(async () => {
   try {
     readings.value = await unwrap(await client.api.readings.$get())
-  } catch (e) {
-    loadError.value = messageOf(e)
+  } catch (error) {
+    loadError.value = messageOf(error)
   }
 })
 
@@ -42,14 +42,14 @@ async function create() {
     title.value = ''
     description.value = ''
     formOpen.value = false
-  } catch (e) {
-    formError.value = messageOf(e)
+  } catch (error) {
+    formError.value = messageOf(error)
   } finally {
     busy.value = false
   }
 }
 
-const fmt = (iso: string) => new Date(iso).toLocaleDateString([], { dateStyle: 'medium' })
+const formatDate = (iso: string) => new Date(iso).toLocaleDateString([], { dateStyle: 'medium' })
 </script>
 
 <template>
@@ -117,18 +117,20 @@ const fmt = (iso: string) => new Date(iso).toLocaleDateString([], { dateStyle: '
       }}
     </p>
     <ul v-else class="grid gap-2.5">
-      <li v-for="r in readings" :key="r.id">
+      <li v-for="reading in readings" :key="reading.id">
         <a
-          :href="`#/reading/${r.id}`"
+          :href="`#/reading/${reading.id}`"
           class="grid gap-1 rounded-lg border border-line bg-panel px-4 py-3.5 transition-colors hover:border-accent"
         >
-          <strong class="font-semibold">{{ r.title }}</strong>
-          <span class="line-clamp-2">{{ r.description }}</span>
+          <strong class="font-semibold">{{ reading.title }}</strong>
+          <span class="line-clamp-2">{{ reading.description }}</span>
           <span class="text-sm text-muted">
-            Assigned by {{ r.createdByName }} · {{ fmt(r.createdAt) }} ·
-            <span class="font-medium text-ink">{{ plural(r.annotationCount, 'annotation') }}</span>
+            Assigned by {{ reading.createdByName }} · {{ formatDate(reading.createdAt) }} ·
+            <span class="font-medium text-ink">{{
+              plural(reading.annotationCount, 'annotation')
+            }}</span>
             <template v-if="canCreate">
-              · {{ plural(r.studentCount, 'student') }} participating
+              · {{ plural(reading.studentCount, 'student') }} participating
             </template>
           </span>
         </a>

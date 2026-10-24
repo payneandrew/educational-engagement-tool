@@ -22,8 +22,8 @@ onMounted(async () => {
     reading.value = await unwrap(
       await client.api.readings[':id'].$get({ param: { id: props.readingId } }),
     )
-  } catch (e) {
-    loadError.value = messageOf(e)
+  } catch (error) {
+    loadError.value = messageOf(error)
   }
 })
 </script>

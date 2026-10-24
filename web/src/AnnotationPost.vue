@@ -22,14 +22,14 @@ async function saveEdit() {
   if (!error.value) editing.value = false
 }
 async function confirmDelete() {
-  const msg =
+  const message =
     props.post.kind === 'root'
       ? 'Delete this annotation and its replies? This can’t be undone.'
       : 'Delete this reply? This can’t be undone.'
-  if (window.confirm(msg)) error.value = (await remove(props.post.id)) ?? ''
+  if (window.confirm(message)) error.value = (await remove(props.post.id)) ?? ''
 }
 
-const fmt = (iso: string) =>
+const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
 </script>
 
@@ -37,7 +37,7 @@ const fmt = (iso: string) =>
   <div class="py-1" :class="highlight && '-mx-2 rounded-md bg-accent/10 px-2'">
     <div class="flex items-center gap-2 text-xs text-muted">
       <strong class="font-semibold">{{ post.authorName }}</strong>
-      <time :datetime="post.createdAt">{{ fmt(post.createdAt) }}</time>
+      <time :datetime="post.createdAt">{{ formatDateTime(post.createdAt) }}</time>
       <span v-if="post.editedAt">(edited)</span>
       <template v-if="post.authorId === currentUserId && !editing">
         <button data-action="edit" class="btn ml-auto px-1.5 py-0 text-xs" @click="startEdit">

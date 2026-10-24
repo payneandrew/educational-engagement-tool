@@ -3,11 +3,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 // Exercises the HTTP layer (auth + role middleware + validation) via app.request, no server socket needed.
 let mongod: MongoMemoryServer
-let m: { app: (typeof import('./app'))['app']; db: typeof import('./db') }
+let modules: { app: (typeof import('./app'))['app']; db: typeof import('./db') }
 
 // async: app.request() is typed `Response | Promise<Response>`; this always returns a Promise.
 const send = async (method: string, path: string, userId: string, json?: unknown) =>
-  m.app.request(`/api${path}`, {
+  modules.app.request(`/api${path}`, {
     method,
     headers: { 'x-user-id': userId, 'content-type': 'application/json' },
     body: json === undefined ? undefined : JSON.stringify(json),
@@ -17,29 +17,80 @@ const post = (userId: string, json: unknown) => send('POST', '/readings', userId
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create({ binary: { version: '7.0.14' } })
   process.env.MONGO_URI = mongod.getUri()
-  m = { app: (await import('./app')).app, db: await import('./db') }
-  await m.db.initDb()
+  modules = { app: (await import('./app')).app, db: await import('./db') }
+  await modules.db.initDb()
   await (await import('./seed')).seed()
 }, 120_000)
 
 afterAll(async () => {
-  await m.db.mongo.close()
+  await modules.db.mongo.close()
   await mongod.stop()
 })
 
 describe('GET /readings', () => {
   it('includes each reading’s annotation count (replies included) and unique students', async () => {
     const list: { id: string; annotationCount: number; studentCount: number }[] = await (
-      await m.app.request('/api/readings', { headers: { 'x-user-id': 'u-dana' } })
+      await modules.app.request('/api/readings', { headers: { 'x-user-id': 'u-dana' } })
     ).json()
     const stats = (id: string) => {
-      const { annotationCount, studentCount } = list.find((r) => r.id === id)!
+      const { annotationCount, studentCount } = list.find((reading) => reading.id === id)!
       return { annotationCount, studentCount }
     }
     // Seed: Alice's comment with replies from Bob and Carol, plus a comment from Bob.
     expect(stats('civil-disobedience')).toEqual({ annotationCount: 4, studentCount: 3 })
     expect(stats('on-liberty-ch2')).toEqual({ annotationCount: 1, studentCount: 1 })
     expect(stats('natural-selection')).toEqual({ annotationCount: 0, studentCount: 0 }) // no annotations yet
+  })
+})
+
+// Runs against the plain seed data, before the tests below add annotations.
+describe('GET /participation', () => {
+  it('counts every student on every reading, including students who have not posted', async () => {
+    await modules.db.users.insertOne({ _id: 'u-quiet', name: 'Quinn Park', role: 'student' })
+
+    const res = await send('GET', '/participation', 'u-dana')
+    expect(res.status).toBe(200)
+    const { readings, students } = await res.json()
+
+    // Oldest first: the order the readings were assigned.
+    expect(readings.map((reading: { id: string }) => reading.id)).toEqual([
+      'civil-disobedience',
+      'on-liberty-ch2',
+      'natural-selection',
+    ])
+    // Students only (not the instructor), sorted by name.
+    expect(students).toEqual([
+      {
+        id: 'u-alice',
+        name: 'Alice Chen',
+        perReading: [1, 1, 0],
+        total: 2,
+        readingsParticipated: 2,
+      },
+      { id: 'u-bob', name: 'Bob Okafor', perReading: [2, 0, 0], total: 2, readingsParticipated: 1 },
+      {
+        id: 'u-carol',
+        name: 'Carol Silva',
+        perReading: [1, 0, 0],
+        total: 1,
+        readingsParticipated: 1,
+      },
+      {
+        id: 'u-quiet',
+        name: 'Quinn Park',
+        perReading: [0, 0, 0],
+        total: 0,
+        readingsParticipated: 0,
+      },
+    ])
+
+    await modules.db.users.deleteOne({ _id: 'u-quiet' })
+  })
+
+  it('is for instructors only', async () => {
+    const res = await send('GET', '/participation', 'u-alice')
+    expect(res.status).toBe(403)
+    expect(await res.json()).toEqual({ error: 'only instructors can do this' })
   })
 })
 
@@ -60,7 +111,7 @@ describe('POST /readings', () => {
     expect(Date.parse(created.createdAt)).not.toBeNaN()
 
     const list = await (
-      await m.app.request('/api/readings', { headers: { 'x-user-id': 'u-alice' } })
+      await modules.app.request('/api/readings', { headers: { 'x-user-id': 'u-alice' } })
     ).json()
     expect(list[0].id).toBe(created.id)
   })
@@ -68,7 +119,7 @@ describe('POST /readings', () => {
   it('rejects students', async () => {
     const res = await post('u-alice', { title: 'Sneaky', description: 'Not allowed.' })
     expect(res.status).toBe(403)
-    expect(await res.json()).toEqual({ error: 'only instructors can create readings' })
+    expect(await res.json()).toEqual({ error: 'only instructors can do this' })
   })
 
   it('rejects unknown users', async () => {
@@ -95,7 +146,7 @@ describe('annotation routes', () => {
     expect(await res.json()).toMatchObject({ body: 'hi', authorName: 'Alice Chen', kind: 'root' })
 
     const list = await (await send('GET', `/readings/${READING}/annotations`, 'u-dana')).json()
-    expect(list.map((a: { body: string }) => a.body)).toContain('hi')
+    expect(list.map((annotation: { body: string }) => annotation.body)).toContain('hi')
   })
 
   it('rejects instructors on every annotation write', async () => {
@@ -127,7 +178,7 @@ describe('annotation routes', () => {
 describe('GET /readings/:id/stream', () => {
   it('opens immediately and pushes new annotations while connected', async () => {
     const READING = 'on-liberty-ch2'
-    const res = await m.app.request(`/api/readings/${READING}/stream`, {
+    const res = await modules.app.request(`/api/readings/${READING}/stream`, {
       headers: { 'x-user-id': 'u-dana' },
     })
     expect(res.headers.get('content-type')).toBe('text/event-stream')

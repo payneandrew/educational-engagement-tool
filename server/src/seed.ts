@@ -12,7 +12,7 @@ const USERS: UserDoc[] = [
 
 // Fixed ids (rather than generated ones) so tests and links can refer to them. Staggered createdAt so
 // the newest-first list has a stable order.
-const day = (n: number) => new Date(Date.UTC(2026, 8, n, 14))
+const september = (dayOfMonth: number) => new Date(Date.UTC(2026, 8, dayOfMonth, 14))
 const READINGS: ReadingDoc[] = [
   {
     _id: 'civil-disobedience',
@@ -21,7 +21,7 @@ const READINGS: ReadingDoc[] = [
       'Read the full essay (about 30 pages). Focus on Thoreau’s argument for when an individual may refuse to obey the law, and come ready to say whether you find it convincing.',
     createdBy: 'u-dana',
     createdByName: 'Prof. Dana Reyes',
-    createdAt: day(1),
+    createdAt: september(1),
   },
   {
     _id: 'on-liberty-ch2',
@@ -30,7 +30,7 @@ const READINGS: ReadingDoc[] = [
       '“Of the Liberty of Thought and Discussion.” Identify Mill’s three cases for why silencing an opinion is wrong, and annotate the one you find weakest.',
     createdBy: 'u-dana',
     createdByName: 'Prof. Dana Reyes',
-    createdAt: day(8),
+    createdAt: september(8),
   },
   {
     _id: 'natural-selection',
@@ -39,7 +39,7 @@ const READINGS: ReadingDoc[] = [
       '“Natural Selection.” Pay attention to how Darwin argues from artificial selection by breeders to selection in nature. Where is the analogy strongest, and where does it strain?',
     createdBy: 'u-dana',
     createdByName: 'Prof. Dana Reyes',
-    createdAt: day(15),
+    createdAt: september(15),
   },
 ]
 
@@ -56,7 +56,7 @@ export async function seed() {
     'settings',
     'channel_counters',
   ]
-  await Promise.all(names.map((n) => db.dropCollection(n).catch(() => {})))
+  await Promise.all(names.map((name) => db.dropCollection(name).catch(() => {})))
   await createIndexes()
   await users.insertMany(USERS)
   await readings.insertMany(READINGS)
