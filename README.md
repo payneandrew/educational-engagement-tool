@@ -67,5 +67,5 @@ scripts/      dev MongoDB launcher
 
 `npm test` runs Vitest against a throwaway MongoDB:
 
-- `readings.test.ts` calls the real app: `GET /api/readings` returns the right annotation and student counts per reading (replies included, zero for an untouched reading); `POST /api/readings`: instructors can create (input trimmed, new reading listed first), students get 403, unknown users 401, and a blank title or description 400.
+- `api.test.ts` calls the real app over HTTP (auth, role middleware, validation): `GET /api/readings` returns the right annotation and student counts per reading (replies included, zero for an untouched reading); `POST /api/readings` lets instructors create (input trimmed, new reading listed first) and gives students 403, unknown users 401, and a blank title or description 400; annotation routes let students post and anyone read, give instructors 403 on every write, and reject empty annotations (400) and unknown readings (404).
 - `annotations.test.ts` covers the annotation service: events reach only that reading's subscribers, edits are published and marked edited, deleting a root deletes its replies (and publishes one `deleted` event), only authors can edit or delete, replies are one level deep, listing is newest first, and empty annotations are rejected.

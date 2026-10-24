@@ -5,7 +5,7 @@ import { streamSSE } from 'hono/streaming'
 import { users } from './db'
 import type { UserDoc } from './models'
 import { subscribe, subscriberCount } from './events'
-import { bodySchema, idParam, readingSchema, validate } from './schemas'
+import { bodySchema, readingSchema, validate } from './schemas'
 import {
   createReply,
   createRoot,
@@ -30,18 +30,17 @@ const auth = createMiddleware<Env>(async (c, next) => {
   await next()
 })
 
+// Anyone can read. Only instructors create readings, and only students write annotations.
 const instructorOnly = createMiddleware<Env>(async (c, next) => {
   if (c.get('user').role !== 'instructor')
     throw new HTTPException(403, { message: 'only instructors can create readings' })
   await next()
 })
-
-/** Anyone can read a discussion; only students write to one. */
-const asStudent = (u: UserDoc) => {
-  if (u.role !== 'student')
+const studentOnly = createMiddleware<Env>(async (c, next) => {
+  if (c.get('user').role !== 'student')
     throw new HTTPException(403, { message: 'only students can post annotations' })
-  return u
-}
+  await next()
+})
 
 /**
  * ONE chained expression. Each `.get/.post/...` returns a Hono type that accumulates the route's
@@ -71,55 +70,32 @@ export const app = new Hono<Env>()
     c.json(await createReading(c.get('user'), c.req.valid('json')), 201),
   )
 
-  .get('/readings/:id', validate('param', idParam), async (c) =>
-    c.json(await getReading(c.req.valid('param').id)),
-  )
+  .get('/readings/:id', async (c) => c.json(await getReading(c.req.param('id'))))
 
-  .get('/readings/:id/annotations', validate('param', idParam), async (c) =>
-    c.json(await listAnnotations(c.req.valid('param').id)),
-  )
+  .get('/readings/:id/annotations', async (c) => c.json(await listAnnotations(c.req.param('id'))))
 
   // Each write returns the saved annotation (so the author's UI updates immediately) and is also pushed
   // to everyone viewing the reading over its SSE stream.
-  .post(
-    '/readings/:id/annotations',
-    validate('param', idParam),
-    validate('json', bodySchema),
-    async (c) => {
-      const user = asStudent(c.get('user'))
-      return c.json(await createRoot(user, c.req.valid('param').id, c.req.valid('json').body), 201)
-    },
+  .post('/readings/:id/annotations', studentOnly, validate('json', bodySchema), async (c) =>
+    c.json(await createRoot(c.get('user'), c.req.param('id'), c.req.valid('json').body), 201),
   )
 
-  .post(
-    '/annotations/:id/replies',
-    validate('param', idParam),
-    validate('json', bodySchema),
-    async (c) => {
-      const user = asStudent(c.get('user'))
-      return c.json(await createReply(user, c.req.valid('param').id, c.req.valid('json').body), 201)
-    },
+  .post('/annotations/:id/replies', studentOnly, validate('json', bodySchema), async (c) =>
+    c.json(await createReply(c.get('user'), c.req.param('id'), c.req.valid('json').body), 201),
   )
 
-  .patch(
-    '/annotations/:id',
-    validate('param', idParam),
-    validate('json', bodySchema),
-    async (c) => {
-      const user = asStudent(c.get('user'))
-      return c.json(await editAnnotation(user, c.req.valid('param').id, c.req.valid('json').body))
-    },
+  .patch('/annotations/:id', studentOnly, validate('json', bodySchema), async (c) =>
+    c.json(await editAnnotation(c.get('user'), c.req.param('id'), c.req.valid('json').body)),
   )
 
-  .delete('/annotations/:id', validate('param', idParam), async (c) => {
-    const user = asStudent(c.get('user'))
-    return c.json(await deleteAnnotation(user, c.req.valid('param').id))
-  })
+  .delete('/annotations/:id', studentOnly, async (c) =>
+    c.json(await deleteAnnotation(c.get('user'), c.req.param('id'))),
+  )
 
   // Live updates for one reading. The client loads the full list whenever this (re)connects, so the
   // stream only has to carry what happens while it's open.
-  .get('/readings/:id/stream', validate('param', idParam), (c) => {
-    const readingId = c.req.valid('param').id
+  .get('/readings/:id/stream', (c) => {
+    const readingId = c.req.param('id')
     c.header('X-Accel-Buffering', 'no') // nginx: don't buffer the stream
     return streamSSE(c, async (stream) => {
       await stream.write('retry: 3000\n\n')

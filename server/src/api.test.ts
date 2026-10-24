@@ -5,12 +5,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 let mongod: MongoMemoryServer
 let m: { app: (typeof import('./app'))['app']; db: typeof import('./db') }
 
-const post = (userId: string, json: unknown) =>
-  m.app.request('/api/readings', {
-    method: 'POST',
+// async: app.request() is typed `Response | Promise<Response>`; this always returns a Promise.
+const send = async (method: string, path: string, userId: string, json?: unknown) =>
+  m.app.request(`/api${path}`, {
+    method,
     headers: { 'x-user-id': userId, 'content-type': 'application/json' },
-    body: JSON.stringify(json),
+    body: json === undefined ? undefined : JSON.stringify(json),
   })
+const post = (userId: string, json: unknown) => send('POST', '/readings', userId, json)
 
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create({ binary: { version: '7.0.14' } })
@@ -78,5 +80,45 @@ describe('POST /readings', () => {
     const { error } = await res.json()
     expect(error).toContain('title is required')
     expect(error).toContain('description is required')
+  })
+})
+
+describe('annotation routes', () => {
+  const READING = 'natural-selection' // no seeded annotations
+
+  it('lets a student post (trimmed), and anyone read it back', async () => {
+    const res = await send('POST', `/readings/${READING}/annotations`, 'u-alice', {
+      body: '  hi  ',
+    })
+    expect(res.status).toBe(201)
+    expect(await res.json()).toMatchObject({ body: 'hi', authorName: 'Alice Chen', kind: 'root' })
+
+    const list = await (await send('GET', `/readings/${READING}/annotations`, 'u-dana')).json()
+    expect(list.map((a: { body: string }) => a.body)).toContain('hi')
+  })
+
+  it('rejects instructors on every annotation write', async () => {
+    const root = await (
+      await send('POST', `/readings/${READING}/annotations`, 'u-bob', { body: 'mine' })
+    ).json()
+    const writes = [
+      send('POST', `/readings/${READING}/annotations`, 'u-dana', { body: 'x' }),
+      send('POST', `/annotations/${root.id}/replies`, 'u-dana', { body: 'x' }),
+      send('PATCH', `/annotations/${root.id}`, 'u-dana', { body: 'x' }),
+      send('DELETE', `/annotations/${root.id}`, 'u-dana'),
+    ]
+    for (const res of await Promise.all(writes)) {
+      expect(res.status).toBe(403)
+      expect(await res.json()).toEqual({ error: 'only students can post annotations' })
+    }
+  })
+
+  it('rejects an empty annotation and a reading that does not exist', async () => {
+    const empty = await send('POST', `/readings/${READING}/annotations`, 'u-alice', { body: '  ' })
+    expect(empty.status).toBe(400)
+    expect((await empty.json()).error).toContain('annotation cannot be empty')
+
+    const missing = await send('POST', '/readings/nope/annotations', 'u-alice', { body: 'hello' })
+    expect(missing.status).toBe(404)
   })
 })
