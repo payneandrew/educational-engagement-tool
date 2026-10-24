@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { client, unwrap, type Annotation, type FeedActions, type Reading } from './api'
+import { client, unwrap, type FeedActions, type Reading } from './api'
 import AnnotationFeed from './AnnotationFeed.vue'
 import { currentUserId } from './session'
 import { useAnnotations } from './useAnnotations'
@@ -9,7 +9,7 @@ const props = defineProps<{ documentId: string; canPost: boolean; nameOf: (userI
 
 const doc = ref<Reading | null>(null)
 const loadError = ref('')
-const { load, apply, roots, repliesOf, connectionLost } = useAnnotations(props.documentId)
+const { apply, roots, repliesOf, total, connectionLost, loadError: annotationsError } = useAnnotations(props.documentId)
 
 const busy = ref(false)
 const error = ref('')
@@ -17,21 +17,20 @@ const error = ref('')
 onMounted(async () => {
   try {
     doc.value = await unwrap(await client.api.readings[':id'].$get({ param: { id: props.documentId } }))
-    await load()
   } catch (e) {
     loadError.value = (e as Error).message
   }
 })
 
 /**
- * Every mutation returns the post's new state; applying it right away means the author sees their change
- * without waiting for the SSE echo (which then arrives as a no-op, since apply is by id + seq).
+ * Applying each result right away means the author sees their change without waiting for the SSE
+ * event (which then arrives too and just sets the same values again).
  */
-async function run(fn: () => Promise<Annotation>) {
+async function run(fn: () => Promise<void>) {
   busy.value = true
   error.value = ''
   try {
-    apply(await fn())
+    await fn()
     return true
   } catch (e) {
     error.value = (e as Error).message
@@ -42,19 +41,33 @@ async function run(fn: () => Promise<Annotation>) {
 }
 
 const actions: FeedActions = {
-  create: (body: string) =>
-    run(async () => unwrap(await client.api.readings[':id'].annotations.$post({ param: { id: props.documentId }, json: { body } }))),
-  reply: (rootId: string, body: string) =>
-    run(async () => unwrap(await client.api.annotations[':id'].replies.$post({ param: { id: rootId }, json: { body } }))),
-  edit: (id: string, body: string) => run(async () => unwrap(await client.api.annotations[':id'].$patch({ param: { id }, json: { body } }))),
-  remove: (id: string) => run(async () => unwrap(await client.api.annotations[':id'].$delete({ param: { id } }))),
+  create: body =>
+    run(async () => {
+      const annotation = await unwrap(await client.api.readings[':id'].annotations.$post({ param: { id: props.documentId }, json: { body } }))
+      apply({ type: 'annotation', annotation })
+    }),
+  reply: (rootId, body) =>
+    run(async () => {
+      const annotation = await unwrap(await client.api.annotations[':id'].replies.$post({ param: { id: rootId }, json: { body } }))
+      apply({ type: 'annotation', annotation })
+    }),
+  edit: (id, body) =>
+    run(async () => {
+      const annotation = await unwrap(await client.api.annotations[':id'].$patch({ param: { id }, json: { body } }))
+      apply({ type: 'annotation', annotation })
+    }),
+  remove: id =>
+    run(async () => {
+      const { ids } = await unwrap(await client.api.annotations[':id'].$delete({ param: { id } }))
+      apply({ type: 'deleted', ids })
+    }),
 }
 </script>
 
 <template>
   <div class="page narrow">
     <a href="#">← All readings</a>
-    <p v-if="loadError" class="err">{{ loadError }}</p>
+    <p v-if="loadError || annotationsError" class="err">{{ loadError || annotationsError }}</p>
     <template v-if="doc">
       <article class="card reading">
         <h2>{{ doc.title }}</h2>
@@ -67,6 +80,7 @@ const actions: FeedActions = {
       <AnnotationFeed
         :roots="roots"
         :replies-of="repliesOf"
+        :total="total"
         :me="currentUserId"
         :can-post="canPost"
         :busy="busy"

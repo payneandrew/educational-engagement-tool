@@ -45,8 +45,5 @@ textarea { width: 100%; resize: vertical; }
 .success { margin: 0 0 12px; padding: 8px 12px; border: 1px solid #7cc493; border-radius: 6px; background: #eaf7ee; color: #1e5c33; font-size: 14px; }
 @media (prefers-color-scheme: dark) { .success { background: #16301f; border-color: #2f6b44; color: #a8e0ba; } }
 .notice { margin: 12px 0 0; padding: 8px 12px; border: 1px solid #e0b252; border-radius: 6px; background: #fff6e0; color: #6b4b00; font-size: 14px; }
-@media (prefers-color-scheme: dark) { .success { margin: 0 0 12px; padding: 8px 12px; border: 1px solid #7cc493; border-radius: 6px; background: #eaf7ee; color: #1e5c33; font-size: 14px; }
-@media (prefers-color-scheme: dark) { .success { background: #16301f; border-color: #2f6b44; color: #a8e0ba; } }
-.notice { background: #3a2f12; border-color: #7a5d1c; color: #f0d48a; } }
+@media (prefers-color-scheme: dark) { .notice { background: #3a2f12; border-color: #7a5d1c; color: #f0d48a; } }
 .err { color: #c33; font-size: 13px; }
-.tomb { color: var(--muted); font-style: italic; }

@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { annotations, counters, db, documents, initDb, mongo, users } from './db'
+import { createIndexes, db, documents, initDb, mongo, users } from './db'
 import type { DocumentDoc, UserDoc } from './models'
 import { createReply, createRoot } from './services/annotations'
 
@@ -40,11 +40,12 @@ const DOCS: DocumentDoc[] = [
   },
 ]
 
-/** Wipes and reseeds. Annotations go through the real write path so seq numbers/counters are genuine. */
+/** Wipes and reseeds. Annotations go through the real service functions, same as the API. */
 export async function seed() {
-  await Promise.all([annotations, counters, documents, users].map(c => c.deleteMany({})))
-  // Collections from earlier versions of the app (groups, scoring config); harmless if absent.
-  await Promise.all(['groups', 'settings'].map(n => db.dropCollection(n).catch(() => {})))
+  // Drop (not just empty) so indexes from earlier versions of the app go too. Missing collections are fine.
+  const names = ['annotations', 'documents', 'users', 'groups', 'settings', 'channel_counters']
+  await Promise.all(names.map(n => db.dropCollection(n).catch(() => {})))
+  await createIndexes()
   await users.insertMany(USERS)
   await documents.insertMany(DOCS)
 
@@ -54,8 +55,8 @@ export async function seed() {
     'civil-disobedience',
     'Thoreau says "we should be men first, and subjects afterward." Is putting moral agency before civic obedience still defensible in a complex state?',
   )
-  await createReply(bob, c1._id, 'I think so, but Thoreau skips over who decides what conscience demands.')
-  await createReply(carol, c1._id, 'We read it as a claim about individual duty rather than collective action.')
+  await createReply(bob, c1.id, 'I think so, but Thoreau skips over who decides what conscience demands.')
+  await createReply(carol, c1.id, 'We read it as a claim about individual duty rather than collective action.')
   await createRoot(bob, 'civil-disobedience', 'Nice reversal of the "corporations have no conscience" line near the start.')
   await createRoot(alice, 'on-liberty-ch2', 'Mill’s core move: silencing an opinion presumes you cannot be wrong.')
 }

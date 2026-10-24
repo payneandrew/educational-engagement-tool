@@ -21,9 +21,3 @@ export const readingSchema = z.object({
 
 /** Trimmed first, so whitespace-only annotations are rejected as empty. */
 export const bodySchema = z.object({ body: z.string().trim().min(1, 'annotation cannot be empty').max(5000) })
-
-export const streamQuery = z.object({
-  // EventSource can't set headers on the FIRST connect, so the client passes its snapshot seq here.
-  // On automatic reconnects the browser sends the Last-Event-ID header instead, which wins.
-  lastEventId: z.coerce.number().int().min(0).optional(),
-})

@@ -13,7 +13,7 @@ type Ok<T> = Exclude<T, { error: string }>
 
 // Response types are *inferred* from the client, not declared.
 export type Reading = Ok<InferResponseType<typeof client.api.readings.$get>>[number]
-export type Annotation = Ok<InferResponseType<(typeof client.api.readings)[':id']['annotations']['$get']>>['annotations'][number]
+export type Annotation = Ok<InferResponseType<(typeof client.api.readings)[':id']['annotations']['$get']>>[number]
 
 /** Mutations the discussion UI can trigger. Each resolves true on success, so the caller knows to clear its draft. */
 export interface FeedActions {

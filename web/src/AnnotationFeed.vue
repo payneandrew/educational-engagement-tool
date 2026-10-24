@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import type { Annotation, FeedActions } from './api'
 import AnnotationPost from './AnnotationPost.vue'
 
@@ -7,6 +7,8 @@ const props = defineProps<{
   /** Already sorted newest first. */
   roots: Annotation[]
   repliesOf: (rootId: string) => Annotation[]
+  /** Roots + replies. */
+  total: number
   me: string
   /** Students post; instructors read. */
   canPost: boolean
@@ -19,7 +21,6 @@ const draft = ref('')
 const replyingTo = ref<string | null>(null)
 const replyDraft = ref('')
 
-const total = computed(() => props.roots.reduce((n, r) => n + (r.deletedAt ? 0 : 1) + props.repliesOf(r.id).length, 0))
 
 async function post() {
   if (await props.actions.create(draft.value)) draft.value = ''
@@ -54,7 +55,7 @@ async function sendReply(rootId: string) {
       <div class="replies">
         <AnnotationPost v-for="r in repliesOf(root.id)" :key="r.id" :post="r" :me="me" :busy="busy" :actions="actions" />
       </div>
-      <template v-if="canPost && !root.deletedAt">
+      <template v-if="canPost">
         <form v-if="replyingTo === root.id" class="replies" @submit.prevent="sendReply(root.id)">
           <textarea v-model="replyDraft" rows="2" placeholder="Reply…" />
           <div class="row end">

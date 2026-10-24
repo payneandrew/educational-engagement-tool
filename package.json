@@ -1,7 +1,7 @@
 {
   "name": "educational-engagement-tool",
   "version": "0.1.0",
-  "description": "Marginalia: a small social annotation app (Vue 3, Hono RPC, MongoDB change streams, SSE)",
+  "description": "Marginalia: a collaborative reading app (Vue 3, Hono RPC, MongoDB, SSE)",
   "private": true,
   "type": "module",
   "engines": {
