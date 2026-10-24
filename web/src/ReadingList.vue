@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { client, unwrap, type Reading } from './api'
+import { plural } from './format'
 
 const props = defineProps<{ canCreate: boolean; nameOf: (userId: string) => string }>()
 
@@ -79,7 +80,11 @@ const fmt = (iso: string) => new Date(iso).toLocaleDateString([], { dateStyle: '
         <a :href="`#/doc/${r.id}`">
           <strong>{{ r.title }}</strong>
           <span class="desc">{{ r.description }}</span>
-          <small>Assigned by {{ nameOf(r.createdBy) }} · {{ fmt(r.createdAt) }}</small>
+          <small>
+            Assigned by {{ nameOf(r.createdBy) }} · {{ fmt(r.createdAt) }} ·
+            <span class="count">{{ plural(r.annotationCount, 'annotation') }}</span>
+            <template v-if="canCreate"> · {{ plural(r.studentCount, 'student') }} participating</template>
+          </small>
         </a>
       </li>
     </ul>

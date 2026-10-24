@@ -21,6 +21,22 @@ afterAll(async () => {
   await mongod.stop()
 })
 
+describe('GET /readings', () => {
+  it('includes each reading’s annotation count (replies included) and unique students', async () => {
+    const list: { id: string; annotationCount: number; studentCount: number }[] = await (
+      await m.app.request('/api/readings', { headers: { 'x-user-id': 'u-dana' } })
+    ).json()
+    const stats = (id: string) => {
+      const { annotationCount, studentCount } = list.find(r => r.id === id)!
+      return { annotationCount, studentCount }
+    }
+    // Seed: Alice's comment with replies from Bob and Carol, plus a comment from Bob.
+    expect(stats('civil-disobedience')).toEqual({ annotationCount: 4, studentCount: 3 })
+    expect(stats('on-liberty-ch2')).toEqual({ annotationCount: 1, studentCount: 1 })
+    expect(stats('natural-selection')).toEqual({ annotationCount: 0, studentCount: 0 }) // no annotations yet
+  })
+})
+
 describe('POST /readings', () => {
   it('lets an instructor create a reading, which then lists first', async () => {
     const res = await post('u-dana', { title: '  Plato — Apology  ', description: 'Read the whole dialogue.' })

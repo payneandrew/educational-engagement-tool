@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { client, unwrap, type FeedActions, type Reading } from './api'
+import { client, unwrap, type FeedActions, type ReadingDetail } from './api'
+import { plural } from './format'
 import AnnotationFeed from './AnnotationFeed.vue'
 import { currentUserId } from './session'
 import { useAnnotations } from './useAnnotations'
 
 const props = defineProps<{ documentId: string; canPost: boolean; nameOf: (userId: string) => string }>()
 
-const doc = ref<Reading | null>(null)
+const doc = ref<ReadingDetail | null>(null)
 const loadError = ref('')
-const { apply, roots, repliesOf, total, connectionLost, loadError: annotationsError } = useAnnotations(props.documentId)
+const { apply, roots, repliesOf, total, studentCount, connectionLost, loadError: annotationsError } = useAnnotations(props.documentId)
 
 const busy = ref(false)
 const error = ref('')
@@ -74,6 +75,11 @@ const actions: FeedActions = {
         <small>Assigned by {{ nameOf(doc.createdBy) }} · {{ new Date(doc.createdAt).toLocaleDateString([], { dateStyle: 'medium' }) }}</small>
         <p>{{ doc.description }}</p>
       </article>
+      <!-- Instructor overview: counts come from the live feed, so they update as students post. -->
+      <dl v-if="!canPost" class="stats">
+        <div><dt>Annotations</dt><dd>{{ total }}</dd></div>
+        <div><dt>Students participating</dt><dd>{{ studentCount }}</dd></div>
+      </dl>
       <p v-if="connectionLost" class="notice" role="status">
         Connection lost — reconnecting. New annotations may be delayed.
       </p>

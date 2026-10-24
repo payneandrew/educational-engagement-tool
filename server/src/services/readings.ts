@@ -1,5 +1,5 @@
 import { ObjectId } from 'mongodb'
-import { documents } from '../db'
+import { annotations, documents } from '../db'
 import type { DocumentDoc, UserDoc } from '../models'
 import { AppError } from './errors'
 
@@ -12,8 +12,30 @@ export const toReadingDTO = ({ _id, createdAt, ...rest }: DocumentDoc): ReadingD
   ...rest,
 })
 
-/** Newest first, so a reading an instructor just assigned is at the top. */
-export const listReadings = async () => (await documents.find().sort({ createdAt: -1 }).toArray()).map(toReadingDTO)
+export interface ReadingStats {
+  /** Top-level annotations plus replies. */
+  annotationCount: number
+  /** Distinct authors. Only students can post, so this is the number of students participating. */
+  studentCount: number
+}
+const NO_ACTIVITY: ReadingStats = { annotationCount: 0, studentCount: 0 }
+
+/** One pass over the annotations, grouped by reading. Readings nobody has annotated don't appear. */
+async function statsByReading() {
+  const rows = await annotations
+    .aggregate<ReadingStats & { _id: string }>([
+      { $group: { _id: '$documentId', annotationCount: { $sum: 1 }, authors: { $addToSet: '$authorId' } } },
+      { $project: { annotationCount: 1, studentCount: { $size: '$authors' } } },
+    ])
+    .toArray()
+  return new Map(rows.map(({ _id, ...stats }) => [_id, stats]))
+}
+
+/** Newest first, so a reading an instructor just assigned is at the top. Each carries its activity counts. */
+export async function listReadings() {
+  const [docs, stats] = await Promise.all([documents.find().sort({ createdAt: -1 }).toArray(), statsByReading()])
+  return docs.map(d => ({ ...toReadingDTO(d), ...(stats.get(d._id) ?? NO_ACTIVITY) }))
+}
 
 export async function getReading(id: string) {
   const d = await documents.findOne({ _id: id })
@@ -31,5 +53,5 @@ export async function createReading(instructor: UserDoc, input: { title: string;
     createdAt: new Date(),
   }
   await documents.insertOne(d)
-  return toReadingDTO(d)
+  return { ...toReadingDTO(d), ...NO_ACTIVITY } // same shape as a list entry, so the client can add it straight to the list
 }

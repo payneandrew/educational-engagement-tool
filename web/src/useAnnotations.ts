@@ -81,6 +81,10 @@ export function useAnnotations(documentId: string) {
   // Newest first.
   const roots = computed(() => all.value.filter(a => a.kind === 'root').sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
 
+  const total = computed(() => all.value.length)
+  // Only students can post, so distinct authors = students participating.
+  const studentCount = computed(() => new Set(all.value.map(a => a.authorId)).size)
+
   // `apply` is for the results of this user's own writes: same path as live events, so the same ordering rules hold.
-  return { roots, repliesOf, total: computed(() => all.value.length), apply: receive, connectionLost, loadError }
+  return { roots, repliesOf, total, studentCount, apply: receive, connectionLost, loadError }
 }

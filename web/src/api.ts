@@ -12,7 +12,9 @@ export const client = hc<AppType>(location.origin, { headers: () => ({ 'x-user-i
 type Ok<T> = Exclude<T, { error: string }>
 
 // Response types are *inferred* from the client, not declared.
+/** A reading as listed, with its activity counts. */
 export type Reading = Ok<InferResponseType<typeof client.api.readings.$get>>[number]
+export type ReadingDetail = Ok<InferResponseType<(typeof client.api.readings)[':id']['$get']>>
 export type Annotation = Ok<InferResponseType<(typeof client.api.readings)[':id']['annotations']['$get']>>[number]
 
 /** Mutations the discussion UI can trigger. Each resolves true on success, so the caller knows to clear its draft. */
