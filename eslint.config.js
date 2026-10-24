@@ -1,5 +1,3 @@
-// ESLint flat config, following what create-vue (the official Vue scaffold) generates for a
-// TypeScript + Vitest project. Formatting is Prettier's job (.prettierrc.json); ESLint reports likely bugs.
 import js from '@eslint/js'
 import pluginVitest from '@vitest/eslint-plugin'
 import skipFormatting from '@vue/eslint-config-prettier/skip-formatting'

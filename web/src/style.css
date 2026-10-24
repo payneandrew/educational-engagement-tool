@@ -1,281 +1,44 @@
-:root {
-  --bg: #fafaf8;
-  --panel: #fff;
-  --ink: #1d1d1b;
-  --muted: #6b6b66;
-  --line: #e4e2dc;
-  --accent: #2f5fd0;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
-  color: var(--ink);
+@import 'tailwindcss';
+
+/*
+ * Design tokens. Each becomes a Tailwind color (bg-panel, text-muted, border-line, …). Utilities read
+ * them as CSS variables, so dark mode only has to change the values below, not every template.
+ */
+@theme {
+  --color-page: #fafaf8;
+  --color-panel: #fff;
+  --color-ink: #1d1d1b;
+  --color-muted: #6b6b66;
+  --color-line: #e4e2dc;
+  --color-accent: #2f5fd0;
 }
+
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #17171a;
-    --panel: #202024;
-    --ink: #ececea;
-    --muted: #9a9a94;
-    --line: #34343a;
-    --accent: #7fa2ff;
+    --color-page: #17171a;
+    --color-panel: #202024;
+    --color-ink: #ececea;
+    --color-muted: #9a9a94;
+    --color-line: #34343a;
+    --color-accent: #7fa2ff;
   }
 }
-* {
-  box-sizing: border-box;
-}
-body {
-  margin: 0;
-  background: var(--bg);
-}
-a {
-  color: var(--accent);
-}
-button,
-select,
-input,
-textarea {
-  font: inherit;
-  color: inherit;
-}
-button {
-  cursor: pointer;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  border-radius: 6px;
-  padding: 4px 10px;
-}
-button.primary {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-button.link {
-  border: 0;
-  background: none;
-  padding: 2px 0;
-  color: var(--accent);
-  font-size: 13px;
-}
-button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-textarea,
-input,
-select {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-textarea {
-  width: 100%;
-  resize: vertical;
-}
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 10px 20px;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel);
-  position: sticky;
-  top: 0;
-  z-index: 5;
-}
-.topbar h1 {
-  font-size: 18px;
-  margin: 0;
-}
-.topbar a {
-  text-decoration: none;
-}
-.spacer {
-  flex: 1;
-}
-.page {
-  padding: 20px 16px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-.page.narrow {
-  max-width: 760px;
-}
-.card {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 16px 18px;
-}
-.doc-list {
-  list-style: none;
-  padding: 0;
-  display: grid;
-  gap: 10px;
-}
-.doc-list a {
-  display: grid;
-  gap: 4px;
-  padding: 14px 16px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: inherit;
-  text-decoration: none;
-}
-.doc-list a:hover {
-  border-color: var(--accent);
-}
-.doc-list .desc {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.doc-list small,
-.reading small {
-  color: var(--muted);
-}
-.form {
-  display: grid;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-.form label {
-  display: grid;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--muted);
-}
-.reading {
-  margin: 10px 0 16px;
-}
-.reading h2 {
-  margin: 0 0 2px;
-}
-.reading p {
-  margin: 12px 0 0;
-  white-space: pre-wrap;
-  line-height: 1.6;
-}
-.stats {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  margin: 0 0 16px;
-}
-.stats div {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px 14px;
-}
-.stats dt {
-  font-size: 12px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.stats dd {
-  margin: 2px 0 0;
-  font-size: 24px;
-  font-weight: 600;
-}
-.doc-list .count {
-  color: var(--ink);
-  font-weight: 500;
-}
-.discussion {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 14px;
-}
-.discussion h3 {
-  margin: 0 0 8px;
-  font-size: 14px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-.composer {
-  margin-bottom: 4px;
-}
-.thread {
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
-}
-.replies {
-  margin-left: 14px;
-  padding-left: 10px;
-  border-left: 2px solid var(--line);
-}
-.post {
-  padding: 4px 0;
-}
-.post .meta {
-  font-size: 12px;
-  color: var(--muted);
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.post p {
-  margin: 4px 0;
-  white-space: pre-wrap;
-}
-.meta button[data-action] {
-  padding: 0 6px;
-  font-size: 12px;
-}
-.empty {
-  color: var(--muted);
-  font-size: 14px;
-}
-.row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.row.end {
-  justify-content: flex-end;
-  margin-top: 6px;
-}
-.success {
-  margin: 0 0 12px;
-  padding: 8px 12px;
-  border: 1px solid #7cc493;
-  border-radius: 6px;
-  background: #eaf7ee;
-  color: #1e5c33;
-  font-size: 14px;
-}
-@media (prefers-color-scheme: dark) {
-  .success {
-    background: #16301f;
-    border-color: #2f6b44;
-    color: #a8e0ba;
+
+@layer base {
+  body {
+    @apply bg-page text-ink;
   }
 }
-.notice {
-  margin: 12px 0 0;
-  padding: 8px 12px;
-  border: 1px solid #e0b252;
-  border-radius: 6px;
-  background: #fff6e0;
-  color: #6b4b00;
-  font-size: 14px;
-}
-@media (prefers-color-scheme: dark) {
-  .notice {
-    background: #3a2f12;
-    border-color: #7a5d1c;
-    color: #f0d48a;
+
+/* The two primitives used all over the app. Everything else is utilities in the templates. */
+@layer components {
+  .btn {
+    @apply cursor-pointer rounded-md border border-line bg-panel px-2.5 py-1 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-default disabled:opacity-50;
   }
-}
-.err {
-  color: #c33;
-  font-size: 13px;
+  .btn-primary {
+    @apply border-accent bg-accent text-white;
+  }
+  .field {
+    @apply w-full rounded-md border border-line bg-panel px-2 py-1.5 text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent;
+  }
 }

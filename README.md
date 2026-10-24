@@ -2,7 +2,7 @@
 
 Instructors assign readings; students discuss them through annotations (comments on a whole reading), with replies, live updates, and edit/delete of their own posts.
 
-**Stack:** TypeScript · Vue 3 (`<script setup>`) + Vite · Hono on `@hono/node-server` · MongoDB (official driver) · Zod via `@hono/zod-validator` · Vitest.
+**Stack:** TypeScript · Vue 3 (`<script setup>`) + Vite · Hono on `@hono/node-server` · MongoDB (official driver) · Zod via `@hono/zod-validator` · Tailwind CSS v4 · Vitest.
 
 ## Run it
 

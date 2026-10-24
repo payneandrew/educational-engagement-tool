@@ -91,30 +91,36 @@ const actions: FeedActions = {
 </script>
 
 <template>
-  <div class="page narrow">
-    <a href="#">← All readings</a>
-    <p v-if="loadError || annotationsError" class="err">{{ loadError || annotationsError }}</p>
+  <div class="mx-auto max-w-3xl px-4 py-5">
+    <a href="#" class="text-sm text-accent hover:underline">← All readings</a>
+    <p v-if="loadError || annotationsError" class="mt-2 text-sm text-red-600 dark:text-red-400">
+      {{ loadError || annotationsError }}
+    </p>
     <template v-if="doc">
-      <article class="card reading">
-        <h2>{{ doc.title }}</h2>
-        <small>
+      <article class="mt-2.5 mb-4 rounded-lg border border-line bg-panel p-4">
+        <h2 class="text-2xl font-bold">{{ doc.title }}</h2>
+        <p class="text-sm text-muted">
           Assigned by {{ nameOf(doc.createdBy) }} ·
-          {{ new Date(doc.createdAt).toLocaleDateString([], { dateStyle: 'medium' }) }}</small
-        >
-        <p>{{ doc.description }}</p>
+          {{ new Date(doc.createdAt).toLocaleDateString([], { dateStyle: 'medium' }) }}
+        </p>
+        <p class="mt-3 leading-relaxed whitespace-pre-wrap">{{ doc.description }}</p>
       </article>
       <!-- Instructor overview: counts come from the live feed, so they update as students post. -->
-      <dl v-if="!canPost" class="stats">
-        <div>
-          <dt>Annotations</dt>
-          <dd>{{ total }}</dd>
+      <dl v-if="!canPost" class="mb-4 grid grid-cols-2 gap-2.5">
+        <div class="rounded-lg border border-line bg-panel px-3.5 py-2.5">
+          <dt class="text-xs tracking-wide text-muted uppercase">Annotations</dt>
+          <dd class="mt-0.5 text-2xl font-semibold">{{ total }}</dd>
         </div>
-        <div>
-          <dt>Students participating</dt>
-          <dd>{{ studentCount }}</dd>
+        <div class="rounded-lg border border-line bg-panel px-3.5 py-2.5">
+          <dt class="text-xs tracking-wide text-muted uppercase">Students participating</dt>
+          <dd class="mt-0.5 text-2xl font-semibold">{{ studentCount }}</dd>
         </div>
       </dl>
-      <p v-if="connectionLost" class="notice" role="status">
+      <p
+        v-if="connectionLost"
+        role="status"
+        class="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+      >
         Connection lost — reconnecting. New annotations may be delayed.
       </p>
       <AnnotationFeed

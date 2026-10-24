@@ -24,12 +24,15 @@ onUnmounted(() => window.removeEventListener('hashchange', onHash))
 </script>
 
 <template>
-  <header class="topbar">
-    <h1><a href="#">Marginalia</a></h1>
-    <span class="spacer" />
-    <label>
+  <header
+    class="sticky top-0 z-10 flex items-center gap-4 border-b border-line bg-panel px-5 py-2.5"
+  >
+    <h1 class="text-lg font-semibold">
+      <a href="#" class="text-accent">Marginalia</a>
+    </h1>
+    <label class="ml-auto flex items-center gap-2 text-sm">
       Viewing as
-      <select v-model="currentUserId">
+      <select v-model="currentUserId" class="field w-auto">
         <option v-for="u in users" :key="u._id" :value="u._id">{{ u.name }} — {{ u.role }}</option>
       </select>
     </label>
