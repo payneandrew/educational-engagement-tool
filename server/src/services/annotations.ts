@@ -1,5 +1,5 @@
 import { ObjectId } from 'mongodb'
-import { annotations, documents } from '../db'
+import { annotations, readings } from '../db'
 import { publish } from '../events'
 import type { AnnotationDoc, UserDoc } from '../models'
 import { AppError } from './errors'
@@ -21,13 +21,13 @@ export const toDTO = ({ _id, createdAt, editedAt, ...rest }: AnnotationDoc): Ann
 /** Every write tells the reading's live viewers what changed, after it has been saved. */
 function saved(a: AnnotationDoc) {
   const dto = toDTO(a)
-  publish(a.documentId, { type: 'annotation', annotation: dto })
+  publish(a.readingId, { type: 'annotation', annotation: dto })
   return dto
 }
 
 const newAnnotation = (
   user: UserDoc,
-  fields: Pick<AnnotationDoc, 'documentId' | 'kind' | 'parentId' | 'body'>,
+  fields: Pick<AnnotationDoc, 'readingId' | 'kind' | 'parentId' | 'body'>,
 ): AnnotationDoc => ({
   _id: new ObjectId().toHexString(),
   ...fields,
@@ -37,10 +37,10 @@ const newAnnotation = (
   editedAt: null,
 })
 
-export async function createRoot(user: UserDoc, documentId: string, body: string) {
-  if (!(await documents.countDocuments({ _id: documentId }, { limit: 1 })))
+export async function createRoot(user: UserDoc, readingId: string, body: string) {
+  if (!(await readings.countDocuments({ _id: readingId }, { limit: 1 })))
     throw new AppError(404, 'reading not found')
-  const a = newAnnotation(user, { documentId, kind: 'root', parentId: null, body })
+  const a = newAnnotation(user, { readingId, kind: 'root', parentId: null, body })
   await annotations.insertOne(a)
   return saved(a)
 }
@@ -50,7 +50,7 @@ export async function createReply(user: UserDoc, parentId: string, body: string)
   if (!parent) throw new AppError(404, 'annotation not found')
   if (parent.kind !== 'root') throw new AppError(400, 'can only reply to a top-level annotation')
   const a = newAnnotation(user, {
-    documentId: parent.documentId,
+    readingId: parent.readingId,
     kind: 'reply',
     parentId: parent._id,
     body,
@@ -89,10 +89,10 @@ export async function deleteAnnotation(user: UserDoc, id: string) {
       : []
   const ids = [id, ...replyIds]
   await annotations.deleteMany({ _id: { $in: ids } })
-  publish(a.documentId, { type: 'deleted', ids })
+  publish(a.readingId, { type: 'deleted', ids })
   return { ids }
 }
 
 /** A reading's whole discussion, newest first. The client groups replies under their roots. */
-export const listAnnotations = async (documentId: string) =>
-  (await annotations.find({ documentId }).sort({ createdAt: -1 }).toArray()).map(toDTO)
+export const listAnnotations = async (readingId: string) =>
+  (await annotations.find({ readingId }).sort({ createdAt: -1 }).toArray()).map(toDTO)

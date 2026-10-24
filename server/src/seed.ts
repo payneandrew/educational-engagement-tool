@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
-import { createIndexes, db, documents, initDb, mongo, users } from './db'
-import type { DocumentDoc, UserDoc } from './models'
+import { createIndexes, db, initDb, mongo, readings, users } from './db'
+import type { ReadingDoc, UserDoc } from './models'
 import { createReply, createRoot } from './services/annotations'
 
 const USERS: UserDoc[] = [
@@ -13,7 +13,7 @@ const USERS: UserDoc[] = [
 // Fixed ids (rather than generated ones) so tests and links can refer to them. Staggered createdAt so
 // the newest-first list has a stable order.
 const day = (n: number) => new Date(Date.UTC(2026, 8, n, 14))
-const DOCS: DocumentDoc[] = [
+const READINGS: ReadingDoc[] = [
   {
     _id: 'civil-disobedience',
     title: 'Thoreau — On the Duty of Civil Disobedience',
@@ -43,11 +43,20 @@ const DOCS: DocumentDoc[] = [
 /** Wipes and reseeds. Annotations go through the real service functions, same as the API. */
 export async function seed() {
   // Drop (not just empty) so indexes from earlier versions of the app go too. Missing collections are fine.
-  const names = ['annotations', 'documents', 'users', 'groups', 'settings', 'channel_counters']
+  // `documents`, `groups`, `settings` and `channel_counters` are from earlier versions of the app.
+  const names = [
+    'annotations',
+    'readings',
+    'users',
+    'documents',
+    'groups',
+    'settings',
+    'channel_counters',
+  ]
   await Promise.all(names.map((n) => db.dropCollection(n).catch(() => {})))
   await createIndexes()
   await users.insertMany(USERS)
-  await documents.insertMany(DOCS)
+  await readings.insertMany(READINGS)
 
   const [alice, bob, carol] = USERS
   const c1 = await createRoot(

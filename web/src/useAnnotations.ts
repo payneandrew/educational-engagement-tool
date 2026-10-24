@@ -12,7 +12,7 @@ type Change = { type: 'annotation'; annotation: Annotation } | { type: 'deleted'
  * to replay history. Events that arrive while a load is in flight are held back and applied after it,
  * so a slow response can't overwrite a newer edit or bring back a deleted post.
  */
-export function useAnnotations(documentId: string) {
+export function useAnnotations(readingId: string) {
   const byId = reactive<Record<string, Annotation>>({})
   /** True only after an established stream drops, so the first connect doesn't flash a warning. */
   const connectionLost = ref(false)
@@ -35,7 +35,7 @@ export function useAnnotations(documentId: string) {
     pending = []
     try {
       const list = await unwrap(
-        await client.api.readings[':id'].annotations.$get({ param: { id: documentId } }),
+        await client.api.readings[':id'].annotations.$get({ param: { id: readingId } }),
       )
       for (const k of Object.keys(byId)) delete byId[k]
       for (const a of list) byId[a.id] = a
@@ -52,7 +52,7 @@ export function useAnnotations(documentId: string) {
   function connect() {
     if (disposed) return
     // EventSource can't send headers, so the user id goes in the query string.
-    const url = client.api.readings[':id'].stream.$url({ param: { id: documentId } })
+    const url = client.api.readings[':id'].stream.$url({ param: { id: readingId } })
     url.searchParams.set('uid', currentUserId.value)
     es = new EventSource(url)
     es.onopen = () => {

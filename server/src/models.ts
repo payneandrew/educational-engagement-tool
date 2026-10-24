@@ -5,7 +5,7 @@ export interface UserDoc {
 }
 
 /** A reading an instructor has assigned. */
-export interface DocumentDoc {
+export interface ReadingDoc {
   _id: string
   title: string
   description: string
@@ -20,7 +20,7 @@ export interface DocumentDoc {
  */
 export interface AnnotationDoc {
   _id: string
-  documentId: string
+  readingId: string
   kind: 'root' | 'reply'
   parentId: string | null
   authorId: string

@@ -1,12 +1,12 @@
 import { ObjectId } from 'mongodb'
-import { annotations, documents } from '../db'
-import type { DocumentDoc, UserDoc } from '../models'
+import { annotations, readings } from '../db'
+import type { ReadingDoc, UserDoc } from '../models'
 import { AppError } from './errors'
 
 /** Wire shape for REST. Inferred types flow from here to the Vue app via Hono RPC. */
-export type ReadingDTO = Omit<DocumentDoc, '_id' | 'createdAt'> & { id: string; createdAt: string }
+export type ReadingDTO = Omit<ReadingDoc, '_id' | 'createdAt'> & { id: string; createdAt: string }
 
-export const toReadingDTO = ({ _id, createdAt, ...rest }: DocumentDoc): ReadingDTO => ({
+export const toReadingDTO = ({ _id, createdAt, ...rest }: ReadingDoc): ReadingDTO => ({
   id: _id,
   createdAt: createdAt.toISOString(),
   ...rest,
@@ -26,7 +26,7 @@ async function statsByReading() {
     .aggregate<ReadingStats & { _id: string }>([
       {
         $group: {
-          _id: '$documentId',
+          _id: '$readingId',
           annotationCount: { $sum: 1 },
           authors: { $addToSet: '$authorId' },
         },
@@ -39,15 +39,15 @@ async function statsByReading() {
 
 /** Newest first, so a reading an instructor just assigned is at the top. Each carries its activity counts. */
 export async function listReadings() {
-  const [docs, stats] = await Promise.all([
-    documents.find().sort({ createdAt: -1 }).toArray(),
+  const [list, stats] = await Promise.all([
+    readings.find().sort({ createdAt: -1 }).toArray(),
     statsByReading(),
   ])
-  return docs.map((d) => ({ ...toReadingDTO(d), ...(stats.get(d._id) ?? NO_ACTIVITY) }))
+  return list.map((d) => ({ ...toReadingDTO(d), ...(stats.get(d._id) ?? NO_ACTIVITY) }))
 }
 
 export async function getReading(id: string) {
-  const d = await documents.findOne({ _id: id })
+  const d = await readings.findOne({ _id: id })
   if (!d) throw new AppError(404, 'reading not found')
   return toReadingDTO(d)
 }
@@ -57,13 +57,13 @@ export async function createReading(
   instructor: UserDoc,
   input: { title: string; description: string },
 ) {
-  const d: DocumentDoc = {
+  const d: ReadingDoc = {
     _id: new ObjectId().toHexString(),
     title: input.title,
     description: input.description,
     createdBy: instructor._id,
     createdAt: new Date(),
   }
-  await documents.insertOne(d)
+  await readings.insertOne(d)
   return { ...toReadingDTO(d), ...NO_ACTIVITY } // same shape as a list entry, so the client can add it straight to the list
 }

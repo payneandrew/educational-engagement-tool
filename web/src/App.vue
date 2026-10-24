@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { client, unwrap } from './api'
-import DocumentView from './DocumentView.vue'
+import ReadingView from './ReadingView.vue'
 import ReadingList from './ReadingList.vue'
 import { currentUserId } from './session'
 
@@ -11,7 +11,7 @@ const hash = ref(location.hash)
 const onHash = () => (hash.value = location.hash)
 
 const me = computed(() => users.value.find((u) => u._id === currentUserId.value))
-const docId = computed(() => /^#\/doc\/(.+)$/.exec(hash.value)?.[1] ?? null)
+const readingId = computed(() => /^#\/reading\/(.+)$/.exec(hash.value)?.[1] ?? null)
 const nameOf = (id: string) => users.value.find((u) => u._id === id)?.name ?? 'Unknown'
 
 onMounted(async () => {
@@ -40,10 +40,10 @@ onUnmounted(() => window.removeEventListener('hashchange', onHash))
 
   <template v-if="me">
     <!-- :key on the user remounts the page, which re-fetches and (for a reading) reopens the stream as the new user -->
-    <DocumentView
-      v-if="docId"
-      :key="`${me._id}:${docId}`"
-      :document-id="docId"
+    <ReadingView
+      v-if="readingId"
+      :key="`${me._id}:${readingId}`"
+      :reading-id="readingId"
       :can-post="me.role === 'student'"
       :name-of="nameOf"
     />

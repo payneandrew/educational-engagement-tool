@@ -6,12 +6,12 @@ import { currentUserId } from './session'
 import { useAnnotations } from './useAnnotations'
 
 const props = defineProps<{
-  documentId: string
+  readingId: string
   canPost: boolean
   nameOf: (userId: string) => string
 }>()
 
-const doc = ref<ReadingDetail | null>(null)
+const reading = ref<ReadingDetail | null>(null)
 const loadError = ref('')
 const {
   apply,
@@ -21,15 +21,15 @@ const {
   studentCount,
   connectionLost,
   loadError: annotationsError,
-} = useAnnotations(props.documentId)
+} = useAnnotations(props.readingId)
 
 const busy = ref(false)
 const error = ref('')
 
 onMounted(async () => {
   try {
-    doc.value = await unwrap(
-      await client.api.readings[':id'].$get({ param: { id: props.documentId } }),
+    reading.value = await unwrap(
+      await client.api.readings[':id'].$get({ param: { id: props.readingId } }),
     )
   } catch (e) {
     loadError.value = (e as Error).message
@@ -59,7 +59,7 @@ const actions: FeedActions = {
     run(async () => {
       const annotation = await unwrap(
         await client.api.readings[':id'].annotations.$post({
-          param: { id: props.documentId },
+          param: { id: props.readingId },
           json: { body },
         }),
       )
@@ -96,14 +96,14 @@ const actions: FeedActions = {
     <p v-if="loadError || annotationsError" class="mt-2 text-sm text-red-600 dark:text-red-400">
       {{ loadError || annotationsError }}
     </p>
-    <template v-if="doc">
+    <template v-if="reading">
       <article class="mt-2.5 mb-4 rounded-lg border border-line bg-panel p-4">
-        <h2 class="text-2xl font-bold">{{ doc.title }}</h2>
+        <h2 class="text-2xl font-bold">{{ reading.title }}</h2>
         <p class="text-sm text-muted">
-          Assigned by {{ nameOf(doc.createdBy) }} ·
-          {{ new Date(doc.createdAt).toLocaleDateString([], { dateStyle: 'medium' }) }}
+          Assigned by {{ nameOf(reading.createdBy) }} ·
+          {{ new Date(reading.createdAt).toLocaleDateString([], { dateStyle: 'medium' }) }}
         </p>
-        <p class="mt-3 leading-relaxed whitespace-pre-wrap">{{ doc.description }}</p>
+        <p class="mt-3 leading-relaxed whitespace-pre-wrap">{{ reading.description }}</p>
       </article>
       <!-- Instructor overview: counts come from the live feed, so they update as students post. -->
       <dl v-if="!canPost" class="mb-4 grid grid-cols-2 gap-2.5">

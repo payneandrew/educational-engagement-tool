@@ -118,7 +118,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleDateString([], { dateStyle: '
     <ul v-else class="grid gap-2.5">
       <li v-for="r in readings" :key="r.id">
         <a
-          :href="`#/doc/${r.id}`"
+          :href="`#/reading/${r.id}`"
           class="grid gap-1 rounded-lg border border-line bg-panel px-4 py-3.5 transition-colors hover:border-accent"
         >
           <strong class="font-semibold">{{ r.title }}</strong>

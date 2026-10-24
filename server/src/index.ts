@@ -1,12 +1,12 @@
 import { serve } from '@hono/node-server'
 import { app } from './app'
-import { documents, initDb, mongo } from './db'
+import { initDb, mongo, readings } from './db'
 import { seed } from './seed'
 
 const port = Number(process.env.PORT ?? 3001)
 
 await initDb()
-if ((await documents.countDocuments()) === 0) {
+if ((await readings.countDocuments()) === 0) {
   console.log('[api] empty database, seeding…')
   await seed()
 }

@@ -119,11 +119,11 @@ export const app = new Hono<Env>()
   // Live updates for one reading. The client loads the full list whenever this (re)connects, so the
   // stream only has to carry what happens while it's open.
   .get('/readings/:id/stream', validate('param', idParam), (c) => {
-    const documentId = c.req.valid('param').id
+    const readingId = c.req.valid('param').id
     c.header('X-Accel-Buffering', 'no') // nginx: don't buffer the stream
     return streamSSE(c, async (stream) => {
       await stream.write('retry: 3000\n\n')
-      const unsubscribe = subscribe(documentId, (event) => {
+      const unsubscribe = subscribe(readingId, (event) => {
         const data = JSON.stringify(event.type === 'annotation' ? event.annotation : event.ids)
         // A write racing a disconnect rejects; the abort handler below cleans up, so just drop it.
         stream.writeSSE({ event: event.type, data }).catch(() => {})
