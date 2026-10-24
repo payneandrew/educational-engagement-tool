@@ -1,11 +1,22 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import AnnotationPost from './AnnotationPost.vue'
 import { useAnnotations } from './useAnnotations'
 
 /** Students post; instructors read. */
 defineProps<{ canPost: boolean }>()
-const { roots, repliesOf, total, loading, busy, create, reply } = useAnnotations()
+const { roots, repliesOf, total, authors, loading, busy, create, reply } = useAnnotations()
+
+/** Instructors can narrow the feed to one student ('' = everyone). */
+const studentFilter = ref('')
+/** Threads the student took part in, as the opening comment or a reply. Shown whole, for context. */
+const visibleRoots = computed(() => {
+  const id = studentFilter.value
+  if (!id) return roots.value
+  return roots.value.filter(
+    (root) => root.authorId === id || repliesOf(root.id).some((r) => r.authorId === id),
+  )
+})
 
 const draft = ref('')
 const draftError = ref('')
@@ -30,9 +41,20 @@ async function sendReply(rootId: string) {
 
 <template>
   <section class="rounded-lg border border-line bg-panel p-3.5">
-    <h3 class="mb-2 text-sm font-semibold tracking-wide text-muted uppercase">
-      Discussion<template v-if="!loading"> ({{ total }})</template>
-    </h3>
+    <div class="mb-2 flex items-center gap-2">
+      <h3 class="flex-1 text-sm font-semibold tracking-wide text-muted uppercase">
+        Discussion<template v-if="!loading"> ({{ total }})</template>
+      </h3>
+      <label v-if="!canPost && authors.length" class="flex items-center gap-2 text-sm text-muted">
+        Student
+        <select v-model="studentFilter" class="field w-auto py-1 text-sm">
+          <option value="">All students</option>
+          <option v-for="s in authors" :key="s.id" :value="s.id">
+            {{ s.name }} ({{ s.count }})
+          </option>
+        </select>
+      </label>
+    </div>
 
     <form v-if="canPost" class="mb-2" @submit.prevent="post">
       <textarea v-model="draft" class="field" rows="3" placeholder="Add an annotation…" />
@@ -52,11 +74,19 @@ async function sendReply(rootId: string) {
           : 'No students have annotated this reading yet.'
       }}
     </p>
+    <p v-else-if="!visibleRoots.length" class="text-sm text-muted">
+      No annotations from this student.
+    </p>
 
-    <div v-for="root in roots" :key="root.id" class="border-t border-line py-2.5">
-      <AnnotationPost :post="root" />
+    <div v-for="root in visibleRoots" :key="root.id" class="border-t border-line py-2.5">
+      <AnnotationPost :post="root" :highlight="root.authorId === studentFilter" />
       <div v-if="repliesOf(root.id).length" class="ml-3.5 border-l-2 border-line pl-2.5">
-        <AnnotationPost v-for="r in repliesOf(root.id)" :key="r.id" :post="r" />
+        <AnnotationPost
+          v-for="r in repliesOf(root.id)"
+          :key="r.id"
+          :post="r"
+          :highlight="r.authorId === studentFilter"
+        />
       </div>
       <template v-if="canPost">
         <form

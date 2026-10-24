@@ -78,14 +78,13 @@ describe('live events', () => {
 describe('delete', () => {
   it('deleting a top-level annotation also deletes its replies, and says so', async () => {
     const root = await m.svc.createRoot(alice, READING, 'opening comment')
-    const reply = await m.svc.createReply(bob, root.id, 'a reply')
+    await m.svc.createReply(bob, root.id, 'a reply')
     const { got, stop } = listen(READING)
 
-    const { ids } = await m.svc.deleteAnnotation(alice, root.id)
+    await m.svc.deleteAnnotation(alice, root.id)
 
-    expect(ids.sort()).toEqual([root.id, reply.id].sort())
-    expect(got).toEqual([{ type: 'deleted', ids }])
-    expect(await m.svc.listAnnotations(READING)).toEqual([])
+    expect(got).toEqual([{ type: 'deleted', id: root.id }]) // one event; clients drop the replies
+    expect(await m.svc.listAnnotations(READING)).toEqual([]) // the root and its reply
     stop()
   })
 

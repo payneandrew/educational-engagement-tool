@@ -26,7 +26,10 @@ function createAnnotations(readingId: string) {
 
   function applyEvent(c: AnnotationEvent) {
     if (c.type === 'annotation') byId[c.annotation.id] = c.annotation
-    else for (const id of c.ids) delete byId[id]
+    // Deleting a top-level annotation also deleted its replies.
+    else
+      for (const a of Object.values(byId))
+        if (a.id === c.id || a.parentId === c.id) delete byId[a.id]
   }
   function receive(c: AnnotationEvent) {
     if (pending) pending.push(c)
@@ -93,8 +96,18 @@ function createAnnotations(readingId: string) {
   )
 
   const total = computed(() => all.value.length)
-  // Only students can post, so distinct authors = students participating.
-  const studentCount = computed(() => new Set(all.value.map((a) => a.authorId)).size)
+  /** Everyone who has posted here, with how many annotations each, sorted by name. */
+  const authors = computed(() => {
+    const byId = new Map<string, { id: string; name: string; count: number }>()
+    for (const a of all.value) {
+      const author = byId.get(a.authorId) ?? { id: a.authorId, name: a.authorName, count: 0 }
+      author.count++
+      byId.set(a.authorId, author)
+    }
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
+  })
+  // Only students can post, so the authors are the students participating.
+  const studentCount = computed(() => authors.value.length)
 
   /** True while one of this user's writes is in flight; the forms disable their buttons. */
   const busy = ref(false)
@@ -146,7 +159,7 @@ function createAnnotations(readingId: string) {
   const remove = (id: string) =>
     write(async () => ({
       type: 'deleted',
-      ids: (await unwrap(await client.api.annotations[':id'].$delete({ param: { id } }))).ids,
+      id: (await unwrap(await client.api.annotations[':id'].$delete({ param: { id } }))).id,
     }))
 
   return {
@@ -154,6 +167,7 @@ function createAnnotations(readingId: string) {
     repliesOf,
     total,
     studentCount,
+    authors,
     connectionLost,
     loading,
     loadError,

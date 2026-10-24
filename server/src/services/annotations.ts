@@ -80,19 +80,16 @@ export async function editAnnotation(user: UserDoc, id: string, body: string) {
   return saved(updated)
 }
 
-/** Deleting a top-level annotation deletes its replies too: a thread without its opening comment has no context. */
+/**
+ * Deleting a top-level annotation deletes its replies too: a thread without its opening comment has
+ * no context. One deleteMany does both (a reply has no replies, so for one this deletes just itself).
+ * The event carries only this id; clients drop its replies themselves, since they know each parentId.
+ */
 export async function deleteAnnotation(user: UserDoc, id: string) {
   const a = await loadOwn(user, id)
-  const replyIds =
-    a.kind === 'root'
-      ? (await annotations.find({ parentId: id }, { projection: { _id: 1 } }).toArray()).map(
-          (r) => r._id,
-        )
-      : []
-  const ids = [id, ...replyIds]
-  await annotations.deleteMany({ _id: { $in: ids } })
-  publish(a.readingId, { type: 'deleted', ids })
-  return { ids }
+  await annotations.deleteMany({ $or: [{ _id: id }, { parentId: id }] })
+  publish(a.readingId, { type: 'deleted', id })
+  return { id }
 }
 
 /** A reading's whole discussion, newest first. The client groups replies under their roots. */

@@ -3,7 +3,7 @@ import type { AnnotationDTO } from './services/annotations'
 
 /** What viewers of a reading are told after a write. */
 export type AnnotationEvent =
-  { type: 'annotation'; annotation: AnnotationDTO } | { type: 'deleted'; ids: string[] }
+  { type: 'annotation'; annotation: AnnotationDTO } | { type: 'deleted'; id: string }
 
 /**
  * In-process pub/sub, one channel per reading (the event name is the readingId). The annotation

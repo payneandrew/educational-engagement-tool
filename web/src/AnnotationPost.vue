@@ -4,7 +4,8 @@ import type { Annotation } from './api'
 import { currentUserId } from './session'
 import { useAnnotations } from './useAnnotations'
 
-const props = defineProps<{ post: Annotation }>()
+/** `highlight` marks the posts of the student the feed is filtered to. */
+const props = defineProps<{ post: Annotation; highlight?: boolean }>()
 const { busy, edit, remove } = useAnnotations()
 
 const editing = ref(false)
@@ -33,7 +34,7 @@ const fmt = (iso: string) =>
 </script>
 
 <template>
-  <div class="py-1">
+  <div class="py-1" :class="highlight && '-mx-2 rounded-md bg-accent/10 px-2'">
     <div class="flex items-center gap-2 text-xs text-muted">
       <strong class="font-semibold">{{ post.authorName }}</strong>
       <time :datetime="post.createdAt">{{ fmt(post.createdAt) }}</time>
