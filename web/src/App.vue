@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { client, messageOf, unwrap, type User } from './api'
-import ParticipationView from './ParticipationView.vue'
-import ReadingView from './ReadingView.vue'
-import ReadingList from './ReadingList.vue'
-import { currentUserId } from './session'
+import { client, messageOf, unwrap, type User } from '@/api/client'
+import ParticipationView from '@/views/ParticipationView.vue'
+import ReadingView from '@/views/ReadingView.vue'
+import ReadingListView from '@/views/ReadingListView.vue'
+import { currentUserId } from '@/api/session'
 
 const users = ref<User[]>([])
 const loadError = ref('')
@@ -70,7 +70,7 @@ onUnmounted(() => window.removeEventListener('hashchange', onHash))
       v-else-if="onParticipation && currentUser.role === 'instructor'"
       :key="`participation:${currentUser.id}`"
     />
-    <ReadingList
+    <ReadingListView
       v-else
       :key="`readings:${currentUser.id}`"
       :can-create="currentUser.role === 'instructor'"

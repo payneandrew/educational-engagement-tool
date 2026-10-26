@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { Annotation } from './api'
-import { currentUserId } from './session'
-import { useAnnotations } from './useAnnotations'
+import type { Annotation } from '@/api/client'
+import { currentUserId } from '@/api/session'
+import { useAnnotations } from '@/composables/useAnnotations'
 
 /** `highlight` marks the posts of the student the feed is filtered to. */
 const props = defineProps<{ post: Annotation; highlight?: boolean }>()

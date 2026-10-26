@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { client, messageOf, unwrap, type Reading } from './api'
-import { plural } from './format'
-import { titleMatches } from './search'
+import { client, messageOf, unwrap, type Reading } from '@/api/client'
+import { plural } from '@/utils/format'
+import { titleMatches } from '@/utils/search'
 
 const props = defineProps<{ canCreate: boolean }>()
 

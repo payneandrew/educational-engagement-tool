@@ -1,9 +1,8 @@
 import { ObjectId } from 'mongodb'
-import { resolve } from 'node:path'
-import { annotations, createIndexes, db, initDb, mongo, readings, users } from './db'
+import { annotations, createIndexes, db, readings, users } from '../db'
 import { DEMO_READINGS, DEMO_THREADS, DEMO_USERS, type DemoPost } from './demo-data'
-import type { AnnotationDoc, ReadingDoc, UserDoc } from './models'
-import { createReply, createRoot } from './services/annotations'
+import type { AnnotationDoc, ReadingDoc, UserDoc } from '../db/models'
+import { createReply, createRoot } from '../services/annotations'
 
 const USERS: UserDoc[] = [
   { _id: 'u-alice', name: 'Alice Chen', role: 'student' },
@@ -130,13 +129,4 @@ export async function seedDemo() {
     }
   }
   await annotations.insertMany(demoAnnotations)
-}
-
-// `npm run seed` resets the database to the demo data; `npm run seed -- --minimal` to the base seed only.
-if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) {
-  const minimal = process.argv.includes('--minimal')
-  await initDb()
-  await (minimal ? seed() : seedDemo())
-  console.log(`[seed] done (${minimal ? 'minimal' : 'demo'} data)`)
-  await mongo.close()
 }

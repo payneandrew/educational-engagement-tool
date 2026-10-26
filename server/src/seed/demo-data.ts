@@ -1,10 +1,10 @@
 /**
  * Extra sample data for trying the app by hand (`npm run seed`). Loaded on top of the base seed in
- * seed.ts, which the automated tests use on its own. Chosen to exercise every feature and edge case:
+ * seed/index.ts, which the automated tests use on its own. Chosen to exercise every feature and edge case:
  * a second instructor, a student who never posts, accented names and titles (search), a busy reading
  * with a long thread, a reading with no annotations, long and multi-paragraph posts, and edits.
  */
-import type { ReadingDoc, UserDoc } from './models'
+import type { ReadingDoc, UserDoc } from '../db/models'
 
 export const DEMO_USERS: UserDoc[] = [
   { _id: 'u-marcus', name: 'Prof. Marcus Lee', role: 'instructor' },

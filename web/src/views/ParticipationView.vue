@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { client, messageOf, unwrap, type Participation } from './api'
-import { plural } from './format'
+import { client, messageOf, unwrap, type Participation } from '@/api/client'
+import { plural } from '@/utils/format'
 
 const data = ref<Participation | null>(null)
 const loadError = ref('')

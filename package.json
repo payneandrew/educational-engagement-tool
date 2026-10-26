@@ -12,7 +12,7 @@
     "dev:db": "tsx scripts/dev-db.ts",
     "dev:api": "wait-on tcp:27018 && tsx watch server/src/index.ts",
     "dev:web": "vite",
-    "seed": "tsx server/src/seed.ts",
+    "seed": "tsx scripts/seed.ts",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
     "lint": "eslint .",

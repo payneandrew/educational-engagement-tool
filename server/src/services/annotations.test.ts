@@ -1,13 +1,13 @@
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import type { ReadingEvent } from './events'
+import type { ReadingEvent } from '../realtime/events'
 
 // Real (throwaway) MongoDB. Imports are dynamic so MONGO_URI is set before db.ts reads it.
 let mongod: MongoMemoryServer
 let modules: {
-  db: typeof import('./db')
-  service: typeof import('./services/annotations')
-  events: typeof import('./events')
+  db: typeof import('../db')
+  service: typeof import('./annotations')
+  events: typeof import('../realtime/events')
 }
 
 const READING = 'civil-disobedience'
@@ -26,12 +26,12 @@ beforeAll(async () => {
   mongod = await MongoMemoryServer.create({ binary: { version: '7.0.14' } })
   process.env.MONGO_URI = mongod.getUri()
   modules = {
-    db: await import('./db'),
-    service: await import('./services/annotations'),
-    events: await import('./events'),
+    db: await import('../db'),
+    service: await import('./annotations'),
+    events: await import('../realtime/events'),
   }
   await modules.db.initDb()
-  await (await import('./seed')).seed()
+  await (await import('../seed')).seed()
 }, 120_000)
 
 beforeEach(async () => {
@@ -145,7 +145,7 @@ describe('rules', () => {
   })
 
   it('rejects empty or whitespace-only annotations and trims the rest', async () => {
-    const { bodySchema } = await import('./schemas')
+    const { bodySchema } = await import('../schemas')
     expect(bodySchema.safeParse({ body: '   ' }).success).toBe(false)
     expect(bodySchema.safeParse({ body: '  ok ' }).data).toEqual({ body: 'ok' })
   })

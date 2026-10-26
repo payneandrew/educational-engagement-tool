@@ -20,17 +20,17 @@ Open http://localhost:5173 and use **Viewing as** to pick a user:
 
 The choice is per tab (`sessionStorage`), so open Alice and Bob in two tabs to watch annotations appear live.
 
-Other commands: `npm run seed` resets the database to the sample data (`server/src/seed.ts` plus `demo-data.ts`: 10 students, 2 instructors, 8 readings and about 50 annotations; `npm run seed -- --minimal` loads just the small base set the tests use), `npm test` runs the tests, `npm run typecheck` checks server and web together. `npm run lint` runs ESLint (config follows the `create-vue` defaults for Vue + TypeScript + Vitest, plus typescript-eslint's rules against unhandled promises) and `npm run format` applies Prettier; `lint:fix` and `format:check` also exist. To use your own MongoDB, set `MONGO_URI` and run `npm run dev:api` and `npm run dev:web` instead of `npm run dev`.
+Other commands: `npm run seed` resets the database to the sample data (`server/src/seed/`: 10 students, 2 instructors, 8 readings and about 50 annotations; `npm run seed -- --minimal` loads just the small base set the tests use), `npm test` runs the tests, `npm run typecheck` checks server and web together. `npm run lint` runs ESLint (config follows the `create-vue` defaults for Vue + TypeScript + Vitest, plus typescript-eslint's rules against unhandled promises) and `npm run format` applies Prettier; `lint:fix` and `format:check` also exist. To use your own MongoDB, set `MONGO_URI` and run `npm run dev:api` and `npm run dev:web` instead of `npm run dev`.
 
 ## How it works
 
 ```
 Vue ──REST (typed hc client)──▶ Hono ──▶ MongoDB
  ▲                                │
- └──── SSE, one per open reading ◀┘ in-process event bus (events.ts)
+ └──── SSE, one per open reading ◀┘ in-process event bus (realtime/events.ts)
 ```
 
-- **Typed API with no codegen.** `server/src/app.ts` defines every route as one chained Hono expression and exports its type; `web/src/api.ts` builds a client from it with `hc<AppType>`, so request and response types are checked end to end. Request bodies are validated with Zod (`schemas.ts`), and failures come back as `{ error }` with a readable message.
+- **Typed API with no codegen.** Each router in `server/src/routes/` is one chained Hono expression, and `server/src/app.ts` mounts them with a chained `.route()` and exports the resulting type; `web/src/api/client.ts` builds a client from it with `hc<AppType>`, so request and response types are checked end to end. Request bodies are validated with Zod (`schemas.ts`, via `middleware/validate.ts`), and failures come back as `{ error }` with a readable message.
 - **Roles.** No real auth: the client sends the chosen user id (`x-user-id`) and the server looks the user up. Anyone can read. Creating a reading is instructor-only, posting is student-only, and editing or deleting is author-only (403 otherwise).
 - **Live updates.** After each successful write, the annotation service publishes an event (`annotation` or `deleted`) on an in-process `EventEmitter`, keyed by reading. Each open SSE stream subscribes to its reading and forwards those events.
 - **Counts.** `GET /api/readings` runs one aggregation over `annotations`, grouped by reading, that counts annotations (replies included) and collects distinct authors. Only students can post, so distinct authors = students participating. Nothing is stored, so counts can't drift out of date. On a reading's page the instructor's counts are computed from the live feed instead, so they update as students post.
@@ -51,23 +51,42 @@ Vue ──REST (typed hc client)──▶ Hono ──▶ MongoDB
 
 ## Tradeoffs
 
-- **The event bus lives in one process.** With several API servers, a write on one wouldn't reach viewers connected to another. To scale out, publish through Redis pub/sub or a MongoDB change stream instead; `events.ts` is the only file that changes.
+- **The event bus lives in one process.** With several API servers, a write on one wouldn't reach viewers connected to another. To scale out, publish through Redis pub/sub or a MongoDB change stream instead; `realtime/events.ts` is the only file that changes.
 - **SSE rather than WebSockets.** Updates only flow server → client (writes are ordinary REST calls), and the browser's `EventSource` reconnects on its own. WebSockets would be worth it for chatty two-way features like presence or typing indicators.
 - **No real auth**, as the exercise allows: anyone can claim any user id.
 
 ## Project layout
 
+Server routes follow Hono's guide for larger apps (one router per resource, mounted with `.route()`); the web app follows the `create-vue` layout, with `@/` meaning `web/src/`.
+
 ```
-server/src/   Hono app (app.ts), services/ (readings, annotations), events.ts, schemas.ts, seed.ts, tests
-web/src/      Vue app: reading list, reading page + discussion feed, typed API client
-scripts/      dev MongoDB launcher
+server/src/
+  index.ts          entry point: connect, seed an empty database, start the server
+  app.ts            mounts the routers and auth, exports AppType for the client
+  routes/           users, readings (incl. a reading's annotations and stream), annotations, participation
+  middleware/       auth (user lookup, role checks), validate (Zod with a uniform error body)
+  services/         readings, annotations, participation: the logic and database access
+  realtime/         events (in-process pub/sub and presence), stream (the SSE endpoint)
+  db/               connection, collections and indexes; models (document types)
+  seed/             base seed and demo data
+  schemas.ts        request body schemas
+web/src/
+  api/              typed hc client, error handling, current user (session)
+  views/            pages: reading list, reading, participation
+  components/       discussion feed and a single post
+  composables/      useAnnotations: a reading's live discussion and its actions
+  utils/            formatting and search helpers
+  assets/main.css   Tailwind entry and theme
+scripts/            dev-db.ts (local MongoDB), seed.ts (npm run seed)
 ```
+
+Tests sit next to the code they cover (`*.test.ts`).
 
 ## Tests
 
 `npm test` runs Vitest; the server tests use a throwaway MongoDB:
 
-- `api.test.ts` calls the real app over HTTP (auth, role middleware, validation): `GET /api/readings` returns the right annotation and student counts per reading (replies included, zero for an untouched reading); `POST /api/readings` lets instructors create (input trimmed, new reading listed first) and gives students 403, unknown users 401, and a blank title or description 400; annotation routes let students post and anyone read, give instructors 403 on every write, and reject empty annotations (400) and unknown readings (404); and the live stream opens immediately and pushes new annotations to a connected client.
-- `annotations.test.ts` covers the annotation service: events reach only that reading's subscribers, edits are published and marked edited, deleting a root deletes its replies (and publishes one `deleted` event with just the root's id), only authors can edit or delete, replies are one level deep, listing is newest first, and empty annotations are rejected.
-- `web/src/errors.test.ts` covers how the frontend turns failures into messages: the API's own `{ error }` text, a readable message for empty or non-JSON error bodies (like the empty 502 Vite's proxy sends while the API restarts), and a network failure.
-- `web/src/search.test.ts` covers the reading search: matching any part of a title regardless of case and accents, and an empty search matching everything.
+- `server/src/app.test.ts` calls the real app over HTTP (auth, role middleware, validation): `GET /api/readings` returns the right annotation and student counts per reading (replies included, zero for an untouched reading); `POST /api/readings` lets instructors create (input trimmed, new reading listed first) and gives students 403, unknown users 401, and a blank title or description 400; annotation routes let students post and anyone read, give instructors 403 on every write, and reject empty annotations (400) and unknown readings (404); and the live stream opens immediately and pushes new annotations to a connected client.
+- `server/src/services/annotations.test.ts` covers the annotation service: events reach only that reading's subscribers, edits are published and marked edited, deleting a root deletes its replies (and publishes one `deleted` event with just the root's id), only authors can edit or delete, replies are one level deep, listing is newest first, and empty annotations are rejected.
+- `web/src/api/errors.test.ts` covers how the frontend turns failures into messages: the API's own `{ error }` text, a readable message for empty or non-JSON error bodies (like the empty 502 Vite's proxy sends while the API restarts), and a network failure.
+- `web/src/utils/search.test.ts` covers the reading search: matching any part of a title regardless of case and accents, and an empty search matching everything.

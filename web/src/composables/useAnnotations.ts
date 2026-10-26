@@ -1,7 +1,7 @@
 import { computed, inject, onScopeDispose, provide, reactive, ref, type InjectionKey } from 'vue'
-import type { AnnotationEvent, ReadingEvent } from '../../server/src/events'
-import { client, messageOf, unwrap, type Annotation } from './api'
-import { currentUserId } from './session'
+import type { AnnotationEvent, ReadingEvent } from '../../../server/src/realtime/events'
+import { client, messageOf, unwrap, type Annotation } from '@/api/client'
+import { currentUserId } from '@/api/session'
 
 /**
  * One reading's discussion: the annotations, the live connection, and the actions that change them.

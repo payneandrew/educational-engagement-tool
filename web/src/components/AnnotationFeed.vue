@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import AnnotationPost from './AnnotationPost.vue'
-import { useAnnotations } from './useAnnotations'
+import { useAnnotations } from '@/composables/useAnnotations'
 
 /** Students post; instructors read. */
 defineProps<{ canPost: boolean }>()

@@ -10,7 +10,10 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "jsx": "preserve",
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "@/*": ["./web/src/*"]
+    }
   },
   "include": ["server/src", "web/src", "scripts", "vite.config.ts"]
 }

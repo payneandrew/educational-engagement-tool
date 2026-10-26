@@ -1,5 +1,5 @@
 /**
- * Turning API responses and failures into data or user-facing messages. Kept apart from api.ts
+ * Turning API responses and failures into data or user-facing messages. Kept apart from client.ts
  * (which builds the client from `location`) so it has no browser dependencies and is easy to test.
  */
 

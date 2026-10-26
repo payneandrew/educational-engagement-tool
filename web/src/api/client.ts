@@ -1,5 +1,5 @@
 import { hc, type InferResponseType } from 'hono/client'
-import type { AppType } from '../../server/src/app'
+import type { AppType } from '../../../server/src/app'
 import { currentUserId } from './session'
 
 export { messageOf, unwrap } from './errors'

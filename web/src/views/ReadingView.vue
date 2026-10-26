@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { client, messageOf, unwrap, type ReadingDetail } from './api'
-import AnnotationFeed from './AnnotationFeed.vue'
-import { currentUserId } from './session'
-import { provideAnnotations } from './useAnnotations'
+import { client, messageOf, unwrap, type ReadingDetail } from '@/api/client'
+import AnnotationFeed from '@/components/AnnotationFeed.vue'
+import { currentUserId } from '@/api/session'
+import { provideAnnotations } from '@/composables/useAnnotations'
 
 const props = defineProps<{ readingId: string; canPost: boolean }>()
 

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import type { AnnotationDTO } from './services/annotations'
+import type { AnnotationDTO } from '../services/annotations'
 
 /** What viewers of a reading are told after a write. */
 export type AnnotationEvent =

@@ -1,8 +1,8 @@
 import { HTTPException } from 'hono/http-exception'
 import { ObjectId } from 'mongodb'
 import { annotations, readings } from '../db'
-import { publish } from '../events'
-import type { AnnotationDoc, UserDoc } from '../models'
+import { publish } from '../realtime/events'
+import type { AnnotationDoc, UserDoc } from '../db/models'
 
 /** Wire shape for REST and SSE. Inferred types flow from here to the Vue app via Hono RPC. */
 export type AnnotationDTO = Omit<AnnotationDoc, '_id' | 'createdAt' | 'editedAt'> & {
