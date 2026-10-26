@@ -39,8 +39,9 @@ onMounted(async () => {
     return
   }
   // A remembered user that no longer exists (e.g. after a reseed) falls back to the first one.
-  if (!users.value.some((user) => user.id === currentUserId.value))
-    currentUserId.value = users.value[0].id
+  const [first] = users.value
+  if (first && !users.value.some((user) => user.id === currentUserId.value))
+    currentUserId.value = first.id
 })
 onUnmounted(() => window.removeEventListener('hashchange', onHash))
 

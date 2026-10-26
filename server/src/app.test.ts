@@ -21,8 +21,9 @@ describe('GET /readings', () => {
       await app.request('/api/readings', { headers: { 'x-user-id': 'u-dana' } })
     ).json()
     const stats = (id: string) => {
-      const { annotationCount, studentCount } = list.find((reading) => reading.id === id)!
-      return { annotationCount, studentCount }
+      const reading = list.find((candidate) => candidate.id === id)
+      if (!reading) throw new Error(`no reading ${id} in the list`)
+      return { annotationCount: reading.annotationCount, studentCount: reading.studentCount }
     }
     // Seed: Alice's comment with replies from Bob and Carol, plus a comment from Bob.
     expect(stats('civil-disobedience')).toEqual({ annotationCount: 4, studentCount: 3 })
@@ -216,7 +217,8 @@ async function openStream(readingId: string, userId: string) {
   const res = await app.request(`/api/readings/${readingId}/stream`, {
     headers: { 'x-user-id': userId },
   })
-  const reader = res.body!.getReader()
+  if (!res.body) throw new Error('the stream has no body')
+  const reader = res.body.getReader()
   const next = async () => new TextDecoder().decode((await reader.read()).value)
   return {
     res,

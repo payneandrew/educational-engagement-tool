@@ -14,7 +14,7 @@ export const streamReading = (c: Context<AppEnv, '/:id/stream'>): Response =>
     // until the first body bytes, and the client only loads the list once the stream has opened.
     // `retry` also tells the browser to wait 3s between reconnect attempts.
     await stream.write('retry: 3000\n\n')
-    // Each message's data is one ReadingEvent (events.ts); the client imports that type.
+    // Each message's data is one ReadingEvent (schema.ts); the client parses it with that schema.
     const unsubscribe = subscribe(readingId, (event) => {
       // A write racing a disconnect rejects; the stream is closing anyway, so drop it.
       stream.writeSSE({ data: JSON.stringify(event) }).catch(() => {})

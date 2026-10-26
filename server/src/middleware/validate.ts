@@ -16,14 +16,14 @@ export const validate = <T extends z.ZodType, Target extends keyof ValidationTar
   schema: T,
 ) =>
   zValidator(target, schema, (result, c) => {
-    if (!result.success)
-      return c.json(
-        {
-          error: result.error.issues
-            .map((issue) => `${issue.path.join('.') || target}: ${issue.message}`)
-            .join('; '),
-        },
-        400,
-      )
+    if (result.success) return
+    return c.json(
+      {
+        error: result.error.issues
+          .map((issue) => `${issue.path.join('.') || target}: ${issue.message}`)
+          .join('; '),
+      },
+      400,
+    )
   })
 /* eslint-enable @typescript-eslint/explicit-module-boundary-types */

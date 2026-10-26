@@ -3,13 +3,9 @@ import { MongoServerError, ObjectId } from 'mongodb'
 import { annotations, readings } from '../db'
 import { publish } from '../realtime/events'
 import type { AnnotationDoc, UserDoc } from '../db/models'
+import type { AnnotationDTO } from '../realtime/schema'
 
-/** Wire shape for REST and SSE. Inferred types flow from here to the Vue app via Hono RPC. */
-export type AnnotationDTO = Omit<AnnotationDoc, '_id' | 'createdAt' | 'editedAt'> & {
-  id: string
-  createdAt: string
-  editedAt: string | null
-}
+export type { AnnotationDTO } from '../realtime/schema'
 
 /** What deleting an annotation answers with: the id that is gone (its replies went with it). */
 export type DeletedAnnotationDTO = { id: string }

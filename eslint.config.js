@@ -20,6 +20,9 @@ export default defineConfigWithVueTs(
   //   handled. `void promise` marks a deliberate fire-and-forget.
   // - Explicit return types on exported functions: what a module returns is a contract, so it is
   //   written down instead of inferred from the body. Inner closures and Vue handlers are exempt.
+  // - No `!` and no object-literal casts: both tell the compiler to stop checking. Narrow the value (or
+  //   throw) instead, and give a literal a type with `: Type` or `satisfies`. Other `as` casts stay
+  //   allowed (`as const` is not really a cast), but each is a deliberate decision.
   {
     name: 'app/strict-types',
     files: ['**/*.{ts,mts,vue}'],
@@ -34,6 +37,11 @@ export default defineConfigWithVueTs(
       ],
       '@typescript-eslint/await-thenable': 'error',
       '@typescript-eslint/explicit-module-boundary-types': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'error',
+      '@typescript-eslint/consistent-type-assertions': [
+        'error',
+        { assertionStyle: 'as', objectLiteralTypeAssertions: 'never' },
+      ],
     },
   },
 

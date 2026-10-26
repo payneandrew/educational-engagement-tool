@@ -33,6 +33,6 @@ export const formatDate = (iso: string): string =>
 /** "Alice Chen" → "AC", "Prof. Dana Reyes" → "DR" (titles like "Prof." are skipped). */
 export function initials(name: string): string {
   const words = name.split(/\s+/).filter((word) => word && !word.endsWith('.'))
-  const letters = words.length > 1 ? [words[0], words[words.length - 1]] : words
-  return letters.map((word) => word[0].toLocaleUpperCase()).join('')
+  const letters = words.filter((_, index) => index === 0 || index === words.length - 1)
+  return letters.map((word) => word.charAt(0).toLocaleUpperCase()).join('')
 }

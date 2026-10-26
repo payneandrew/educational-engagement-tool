@@ -1,5 +1,9 @@
 import { computed, inject, onScopeDispose, provide, reactive, ref, type InjectionKey } from 'vue'
-import type { AnnotationEvent, ReadingEvent, Viewer } from '../../../server/src/realtime/events'
+import {
+  parseReadingEvent,
+  type AnnotationEvent,
+  type Viewer,
+} from '../../../server/src/realtime/schema'
 import { client, messageOf, parseResponse, type Annotation } from '@/api/client'
 import { currentUserId } from '@/api/session'
 import { newId, withRetry } from '@/api/retry'
@@ -81,7 +85,8 @@ function createAnnotations(readingId: string) {
     }
     // Each message is one ReadingEvent, serialized by the server's stream route.
     eventSource.onmessage = (message: MessageEvent<string>) => {
-      const event = JSON.parse(message.data) as ReadingEvent
+      const event = parseReadingEvent(message.data)
+      if (!event) return console.warn('Ignored a live update it could not read:', message.data)
       if (event.type === 'viewers') viewers.value = event.viewers
       else {
         if (event.type === 'annotation') noteArrival(event.annotation)

@@ -50,9 +50,8 @@ describe('live events', () => {
     expect(got).toHaveLength(1)
     expect(got[0]).toMatchObject({
       type: 'annotation',
-      annotation: { id: root.id, body: 'revised wording' },
+      annotation: { id: root.id, body: 'revised wording', editedAt: expect.any(String) },
     })
-    expect(got[0].type === 'annotation' && got[0].annotation.editedAt).toBeTruthy()
     stop()
   })
 
@@ -98,7 +97,7 @@ describe('rules', () => {
       status: 403,
     })
     expect(got).toEqual([])
-    expect((await service.listAnnotations(READING))[0].body).toBe('mine')
+    expect(await service.listAnnotations(READING)).toMatchObject([{ body: 'mine' }])
     stop()
   })
 

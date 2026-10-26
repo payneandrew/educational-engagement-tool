@@ -101,9 +101,11 @@ function toAnnotations(
   const assignedAt = new Map(readingList.map((reading) => [reading._id, reading.createdAt]))
   const result: AnnotationDoc[] = []
   const add = (readingId: string, post: SeedPost, parentId: string | null) => {
-    const author = userById.get(post.by)!
-    const hoursIn = (hours: number) =>
-      new Date(assignedAt.get(readingId)!.getTime() + hours * 3_600_000)
+    const author = userById.get(post.by)
+    if (!author) throw new Error(`seed post by unknown user: ${post.by}`)
+    const assigned = assignedAt.get(readingId)
+    if (!assigned) throw new Error(`seed thread on unknown reading: ${readingId}`)
+    const hoursIn = (hours: number) => new Date(assigned.getTime() + hours * 3_600_000)
     const annotation: AnnotationDoc = {
       _id: new ObjectId().toHexString(),
       readingId,

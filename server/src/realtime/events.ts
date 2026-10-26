@@ -1,15 +1,8 @@
 import { EventEmitter } from 'node:events'
-import type { AnnotationDTO } from '../services/annotations'
+import type { ReadingEvent } from './schema'
 
-/** What viewers of a reading are told after a write. */
-export type AnnotationEvent =
-  { type: 'annotation'; annotation: AnnotationDTO } | { type: 'deleted'; id: string }
-
-/** Someone who has a reading open right now. */
-export type Viewer = { id: string; name: string }
-
-/** Everything sent on a reading's live stream: annotation changes, and who currently has it open. */
-export type ReadingEvent = AnnotationEvent | { type: 'viewers'; viewers: Viewer[] }
+// The event types live in schema.ts (zod schemas the browser parses with); re-exported for their users.
+export type { AnnotationEvent, ReadingEvent, Viewer } from './schema'
 
 /**
  * In-process pub/sub, one channel per reading (the event name is the readingId). The annotation
