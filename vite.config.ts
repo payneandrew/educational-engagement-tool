@@ -18,6 +18,19 @@ export default defineConfig({
   server: {
     port: 5173,
     // Same-origin in dev so the hc client can use relative URLs (and SSE needs no CORS).
-    proxy: { '/api': 'http://localhost:3001' },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        // When the API restarts, close the browser's side of a live stream as well. Otherwise the
+        // proxy keeps it open, so the page never notices the API went away and stops getting updates.
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes, _req, res) => {
+            proxyRes.on('close', () => {
+              if (!res.writableEnded) res.destroy()
+            })
+          })
+        },
+      },
+    },
   },
 })

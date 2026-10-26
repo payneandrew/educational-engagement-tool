@@ -221,7 +221,7 @@ async function openStream(readingId: string, userId: string) {
   return {
     res,
     next,
-    /** The next event's data, skipping heartbeat comments. */
+    /** The next event's data. */
     async nextEvent() {
       for (;;) {
         const chunk = await next()
@@ -249,14 +249,6 @@ describe('GET /readings/:id/stream', () => {
       type: 'annotation',
       annotation: { body: 'live!', authorName: 'Alice Chen' },
     })
-    await stream.close()
-  })
-
-  it('sends a heartbeat comment while the stream is quiet', async () => {
-    const stream = await openStream('natural-selection', 'u-dana')
-    expect(await stream.next()).toBe('retry: 3000\n\n')
-    await stream.nextEvent() // the viewer list
-    expect(await stream.next()).toBe(': ping\n\n') // HEARTBEAT_MS is 100 ms in these tests
     await stream.close()
   })
 

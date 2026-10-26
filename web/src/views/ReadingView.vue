@@ -64,13 +64,13 @@ const othersHere = computed(() => {
       <div class="grid gap-4">
         <article class="rounded-xl border border-line bg-panel px-6 py-7 sm:px-10 sm:py-9">
           <template v-if="reading">
-            <h1 class="font-serif text-3xl leading-tight font-semibold text-balance">
+            <h1 class="font-serif text-3xl leading-tight font-semibold text-balance wrap-anywhere">
               {{ reading.title }}
             </h1>
             <p class="mt-2 text-sm text-muted">
               Assigned by {{ reading.createdByName }} · {{ formatDate(reading.createdAt) }}
             </p>
-            <p class="mt-6 font-serif text-lg leading-8 whitespace-pre-wrap">
+            <p class="mt-6 font-serif text-lg leading-8 wrap-anywhere whitespace-pre-wrap">
               {{ reading.description }}
             </p>
           </template>

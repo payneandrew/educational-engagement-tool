@@ -141,10 +141,10 @@ async function create() {
             :href="`#/reading/${reading.id}`"
             class="group block rounded-xl border border-line bg-panel px-5 py-4 transition hover:border-accent hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
-            <h2 class="font-serif text-lg font-semibold group-hover:text-accent">
+            <h2 class="font-serif text-lg font-semibold wrap-anywhere group-hover:text-accent">
               {{ reading.title }}
             </h2>
-            <p class="mt-1 line-clamp-2 text-muted">{{ reading.description }}</p>
+            <p class="mt-1 line-clamp-2 wrap-anywhere text-muted">{{ reading.description }}</p>
             <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               <span class="text-muted">
                 {{ reading.createdByName }} · {{ formatDate(reading.createdAt) }}

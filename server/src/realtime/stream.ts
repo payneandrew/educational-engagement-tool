@@ -3,9 +3,6 @@ import { streamSSE } from 'hono/streaming'
 import type { AppEnv } from '../middleware/auth'
 import { joinReading, subscribe } from './events'
 
-/** How often the live stream sends a keep-alive comment. Overridable so tests needn't wait. */
-const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MS ?? 25_000)
-
 /**
  * Live updates for one reading. The client reloads the full list whenever this (re)connects, so the
  * stream only carries what happens while it's open.
@@ -24,14 +21,9 @@ export const streamReading = (c: Context<AppEnv, '/:id/stream'>) =>
     })
     // After subscribing, so this stream also gets the viewer list its own arrival triggers.
     const leave = joinReading(readingId, c.get('user'))
-    // Proxies and load balancers close connections that stay idle for about a minute. A comment line
-    // (": …", which EventSource ignores) every HEARTBEAT_MS keeps a quiet stream open.
-    const heartbeat = setInterval(() => {
-      stream.write(': ping\n\n').catch(() => {})
-    }, HEARTBEAT_MS)
-    // Hold the response open until the browser disconnects.
+    // Hold the response open until the browser disconnects. (No heartbeat: the app runs on localhost,
+    // where nothing closes idle connections. See the README's tradeoffs for what a deployment needs.)
     await new Promise<void>((resolve) => stream.onAbort(resolve))
-    clearInterval(heartbeat)
     unsubscribe()
     leave()
   })

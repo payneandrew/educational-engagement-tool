@@ -101,7 +101,7 @@ const notStarted = computed(
             <template #header>
               <a
                 :href="`#/reading/${reading.id}`"
-                class="line-clamp-2 text-left font-semibold text-accent hover:underline"
+                class="line-clamp-2 text-left font-semibold wrap-anywhere text-accent hover:underline"
                 :title="reading.title"
               >
                 {{ reading.title }}

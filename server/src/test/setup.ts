@@ -5,4 +5,3 @@ import { inject } from 'vitest'
 // these once). Every file gets its own database, so files running in parallel can't interfere.
 process.env.MONGO_URI = inject('mongoUri')
 process.env.MONGO_DB = `test-${randomUUID()}`
-process.env.HEARTBEAT_MS = '100' // live-stream keep-alives, so the heartbeat test needn't wait 25s

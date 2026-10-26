@@ -63,6 +63,7 @@ Vue ──REST (typed hc client)──▶ Hono ──▶ MongoDB
 
 - **The event bus lives in one process.** With several API servers, a write on one wouldn't reach viewers connected to another. To scale out, publish through Redis pub/sub or a MongoDB change stream instead; `realtime/events.ts` is the only file that changes.
 - **SSE rather than WebSockets.** Updates only flow server → client (writes are ordinary REST calls), and the browser's `EventSource` reconnects on its own. WebSockets would be worth it for chatty two-way features like presence or typing indicators.
+- **Runs on localhost only**, as the exercise allows. Deployed behind a load balancer or reverse proxy, the live stream would need a heartbeat (those close connections idle for about a minute) and a client-side check that reconnects when the heartbeat stops (some proxies keep a dead connection looking open). In development, Vite's proxy is set to close the browser's stream when the API restarts, so the page notices and reconnects.
 - **No real auth**, as the exercise allows: anyone can claim any user id.
 
 ## Project layout
