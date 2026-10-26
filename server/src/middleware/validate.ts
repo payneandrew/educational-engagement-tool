@@ -3,8 +3,8 @@ import type { ValidationTargets } from 'hono'
 import type { z } from 'zod'
 
 /**
- * zValidator with a uniform failure body. Without the hook, the 400 response type is zod's raw
- * SafeParseError, which would leak into every client call's response union.
+ * zValidator, failing with the same `{ error: string }` body as every other API error, so the
+ * client can show the message ("annotation cannot be empty") instead of a generic one.
  */
 export const validate = <T extends z.ZodType, Target extends keyof ValidationTargets>(
   target: Target,
