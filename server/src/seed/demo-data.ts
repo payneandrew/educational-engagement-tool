@@ -67,18 +67,18 @@ export const DEMO_READINGS: ReadingDoc[] = [
 ]
 
 /** A post, timed in hours after its reading was assigned. `editedAt` too, when it was edited. */
-export interface DemoPost {
+export interface SeedPost {
   by: string
   at: number
   body: string
   editedAt?: number
 }
-export interface DemoThread extends DemoPost {
-  replies?: DemoPost[]
+export interface SeedThread extends SeedPost {
+  replies?: SeedPost[]
 }
 
 /** Threads per reading. Readings from the base seed get a few more; the Arendt reading stays empty. */
-export const DEMO_THREADS: Record<string, DemoThread[]> = {
+export const DEMO_THREADS: Record<string, SeedThread[]> = {
   'civil-disobedience': [
     {
       by: 'u-diego',

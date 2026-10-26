@@ -1,8 +1,13 @@
 import { ObjectId } from 'mongodb'
 import { annotations, createIndexes, db, readings, users } from '../db'
-import { DEMO_READINGS, DEMO_THREADS, DEMO_USERS, type DemoPost } from './demo-data'
 import type { AnnotationDoc, ReadingDoc, UserDoc } from '../db/models'
-import { createReply, createRoot } from '../services/annotations'
+import {
+  DEMO_READINGS,
+  DEMO_THREADS,
+  DEMO_USERS,
+  type SeedPost,
+  type SeedThread,
+} from './demo-data'
 
 const USERS: UserDoc[] = [
   { _id: 'u-alice', name: 'Alice Chen', role: 'student' },
@@ -44,7 +49,84 @@ const READINGS: ReadingDoc[] = [
   },
 ]
 
-/** Wipes and reseeds. Annotations go through the real service functions, same as the API. */
+/**
+ * The base discussion, timed like the demo data: `at` is hours after the reading was assigned. Fixed
+ * times (rather than "now") keep a reading's discussion in order next to the demo posts, and keep it
+ * the same on every reseed.
+ */
+const THREADS: Record<string, SeedThread[]> = {
+  'civil-disobedience': [
+    {
+      by: 'u-alice',
+      at: 8,
+      body: 'Thoreau says "we should be men first, and subjects afterward." Is putting moral agency before civic obedience still defensible in a complex state?',
+      replies: [
+        {
+          by: 'u-bob',
+          at: 11,
+          body: 'I think so, but Thoreau skips over who decides what conscience demands.',
+        },
+        {
+          by: 'u-carol',
+          at: 16,
+          body: 'We read it as a claim about individual duty rather than collective action.',
+        },
+      ],
+    },
+    {
+      by: 'u-bob',
+      at: 30,
+      body: 'Nice reversal of the "corporations have no conscience" line near the start.',
+    },
+  ],
+  'on-liberty-ch2': [
+    {
+      by: 'u-alice',
+      at: 6,
+      body: 'Mill’s core move: silencing an opinion presumes you cannot be wrong.',
+    },
+  ],
+}
+
+/**
+ * Seed threads as annotation documents. Inserted directly rather than through the service functions,
+ * which always stamp "now" (and publish live events nobody is listening to yet).
+ */
+function toAnnotations(
+  threadsByReading: Record<string, SeedThread[]>,
+  people: UserDoc[],
+  readingList: ReadingDoc[],
+) {
+  const userById = new Map(people.map((user) => [user._id, user]))
+  const assignedAt = new Map(readingList.map((reading) => [reading._id, reading.createdAt]))
+  const result: AnnotationDoc[] = []
+  const add = (readingId: string, post: SeedPost, parentId: string | null) => {
+    const author = userById.get(post.by)!
+    const hoursIn = (hours: number) =>
+      new Date(assignedAt.get(readingId)!.getTime() + hours * 3_600_000)
+    const annotation: AnnotationDoc = {
+      _id: new ObjectId().toHexString(),
+      readingId,
+      kind: parentId ? 'reply' : 'root',
+      parentId,
+      authorId: author._id,
+      authorName: author.name,
+      body: post.body,
+      createdAt: hoursIn(post.at),
+      editedAt: post.editedAt === undefined ? null : hoursIn(post.editedAt),
+    }
+    result.push(annotation)
+    return annotation
+  }
+  for (const [readingId, threads] of Object.entries(threadsByReading))
+    for (const thread of threads) {
+      const root = add(readingId, thread, null)
+      for (const reply of thread.replies ?? []) add(readingId, reply, root._id)
+    }
+  return result
+}
+
+/** Wipes and reseeds with the small base set the tests use. */
 export async function seed() {
   // Drop (not just empty) so indexes from earlier versions of the app go too. Missing collections are fine.
   // `documents`, `groups`, `settings` and `channel_counters` are from earlier versions of the app.
@@ -61,72 +143,18 @@ export async function seed() {
   await createIndexes()
   await users.insertMany(USERS)
   await readings.insertMany(READINGS)
-
-  const [alice, bob, carol] = USERS
-  const c1 = await createRoot(
-    alice,
-    'civil-disobedience',
-    'Thoreau says "we should be men first, and subjects afterward." Is putting moral agency before civic obedience still defensible in a complex state?',
-  )
-  await createReply(
-    bob,
-    c1.id,
-    'I think so, but Thoreau skips over who decides what conscience demands.',
-  )
-  await createReply(
-    carol,
-    c1.id,
-    'We read it as a claim about individual duty rather than collective action.',
-  )
-  await createRoot(
-    bob,
-    'civil-disobedience',
-    'Nice reversal of the "corporations have no conscience" line near the start.',
-  )
-  await createRoot(
-    alice,
-    'on-liberty-ch2',
-    'Mill’s core move: silencing an opinion presumes you cannot be wrong.',
-  )
+  await annotations.insertMany(toAnnotations(THREADS, USERS, READINGS))
 }
 
 /**
  * The base seed plus the demo data (demo-data.ts): more students, readings and discussion, for trying
- * the app by hand. Demo annotations are inserted directly so they can carry realistic past timestamps
- * (the service functions always stamp "now").
+ * the app by hand.
  */
 export async function seedDemo() {
   await seed()
   await users.insertMany(DEMO_USERS)
   await readings.insertMany(DEMO_READINGS)
-
-  const people = new Map([...USERS, ...DEMO_USERS].map((user) => [user._id, user]))
-  const assignedAt = new Map(
-    [...READINGS, ...DEMO_READINGS].map((reading) => [reading._id, reading.createdAt.getTime()]),
+  await annotations.insertMany(
+    toAnnotations(DEMO_THREADS, [...USERS, ...DEMO_USERS], [...READINGS, ...DEMO_READINGS]),
   )
-  const demoAnnotations: AnnotationDoc[] = []
-  const toAnnotation = (readingId: string, post: DemoPost, parentId: string | null) => {
-    const author = people.get(post.by)!
-    const hoursIn = (hours: number) => new Date(assignedAt.get(readingId)! + hours * 3_600_000)
-    const annotation: AnnotationDoc = {
-      _id: new ObjectId().toHexString(),
-      readingId,
-      kind: parentId ? 'reply' : 'root',
-      parentId,
-      authorId: author._id,
-      authorName: author.name,
-      body: post.body,
-      createdAt: hoursIn(post.at),
-      editedAt: post.editedAt === undefined ? null : hoursIn(post.editedAt),
-    }
-    demoAnnotations.push(annotation)
-    return annotation
-  }
-  for (const [readingId, threads] of Object.entries(DEMO_THREADS)) {
-    for (const thread of threads) {
-      const root = toAnnotation(readingId, thread, null)
-      for (const reply of thread.replies ?? []) toAnnotation(readingId, reply, root._id)
-    }
-  }
-  await annotations.insertMany(demoAnnotations)
 }
