@@ -150,26 +150,36 @@ function createAnnotations(readingId: string) {
     }
   }
 
-  const create = (body: string) =>
-    write(async () => ({
+  // New posts get their id here, before sending, so a retry after a lost response reuses it and the
+  // server returns the post it already saved instead of creating a second one.
+  const create = (body: string) => {
+    const id = newId()
+    return write(async () => ({
       type: 'annotation',
-      annotation: await unwrap(
-        await client.api.readings[':id'].annotations.$post({
-          param: { id: readingId },
-          json: { body },
-        }),
+      annotation: await withRetry(async () =>
+        unwrap(
+          await client.api.readings[':id'].annotations.$post({
+            param: { id: readingId },
+            json: { body, id },
+          }),
+        ),
       ),
     }))
-  const reply = (rootId: string, body: string) =>
-    write(async () => ({
+  }
+  const reply = (rootId: string, body: string) => {
+    const id = newId()
+    return write(async () => ({
       type: 'annotation',
-      annotation: await unwrap(
-        await client.api.annotations[':id'].replies.$post({
-          param: { id: rootId },
-          json: { body },
-        }),
+      annotation: await withRetry(async () =>
+        unwrap(
+          await client.api.annotations[':id'].replies.$post({
+            param: { id: rootId },
+            json: { body, id },
+          }),
+        ),
       ),
     }))
+  }
   const edit = (id: string, body: string) =>
     write(async () => ({
       type: 'annotation',
@@ -200,6 +210,27 @@ function createAnnotations(readingId: string) {
     reply,
     edit,
     remove,
+  }
+}
+
+/** A new post's id, made in the browser: the same format as the server's ids (24 hex characters). */
+const newId = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(12)), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('')
+
+/**
+ * Retries a request that got no answer at all (fetch rejects with a TypeError), up to three tries.
+ * Only for requests the server recognises as repeats, like posts with a client-made id.
+ */
+async function withRetry<T>(request: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await request()
+    } catch (error) {
+      if (!(error instanceof TypeError) || attempt === 3) throw error
+      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
+    }
   }
 }
 

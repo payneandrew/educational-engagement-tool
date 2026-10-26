@@ -9,3 +9,14 @@ export const readingSchema = z.object({
 export const bodySchema = z.object({
   body: z.string().trim().min(1, 'annotation cannot be empty').max(5000),
 })
+
+/**
+ * Creating a post: the client may choose its id (same format as server ids), so it can show the post
+ * before the server answers and retry without creating a duplicate.
+ */
+export const createSchema = bodySchema.extend({
+  id: z
+    .string()
+    .regex(/^[0-9a-f]{24}$/, 'id must be 24 hexadecimal characters')
+    .optional(),
+})

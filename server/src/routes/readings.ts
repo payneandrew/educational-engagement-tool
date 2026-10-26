@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { instructorOnly, studentOnly, type AppEnv } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { streamReading } from '../realtime/stream'
-import { bodySchema, readingSchema } from '../schemas'
+import { createSchema, readingSchema } from '../schemas'
 import { createRoot, listAnnotations } from '../services/annotations'
 import { createReading, getReading, listReadings } from '../services/readings'
 
@@ -20,8 +20,9 @@ export const readingsRoutes = new Hono<AppEnv>()
 
   // Returns the saved annotation (so the author's UI updates immediately); it's also pushed to
   // everyone viewing the reading over its SSE stream.
-  .post('/:id/annotations', studentOnly, validate('json', bodySchema), async (c) =>
-    c.json(await createRoot(c.get('user'), c.req.param('id'), c.req.valid('json').body), 201),
-  )
+  .post('/:id/annotations', studentOnly, validate('json', createSchema), async (c) => {
+    const { body, id } = c.req.valid('json')
+    return c.json(await createRoot(c.get('user'), c.req.param('id'), body, id), 201)
+  })
 
   .get('/:id/stream', streamReading)

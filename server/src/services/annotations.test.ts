@@ -150,3 +150,32 @@ describe('rules', () => {
     expect(bodySchema.safeParse({ body: '  ok ' }).data).toEqual({ body: 'ok' })
   })
 })
+
+describe('client-chosen ids', () => {
+  const id = 'aaaaaaaaaaaaaaaaaaaaaaaa'
+
+  it('saves the post under the id the client chose', async () => {
+    const created = await modules.service.createRoot(alice, READING, 'shown before saving', id)
+    expect(created.id).toBe(id)
+  })
+
+  it("makes retries safe: a retry whose first attempt was saved returns it, and doesn't post twice", async () => {
+    const { got, stop } = listen(READING)
+    const first = await modules.service.createRoot(alice, READING, 'sent twice', id)
+    const retry = await modules.service.createRoot(alice, READING, 'sent twice', id)
+    expect(retry).toEqual(first)
+    expect(await modules.service.listAnnotations(READING)).toHaveLength(1)
+    expect(got).toHaveLength(1) // viewers heard about it once
+    stop()
+  })
+
+  it('refuses any other use of a taken id, without revealing the post that has it', async () => {
+    await modules.service.createRoot(alice, READING, 'the original', id)
+    const clashes = [
+      () => modules.service.createRoot(bob, READING, 'the original', id), // someone else
+      () => modules.service.createRoot(alice, READING, 'different words', id), // not the same post
+      () => modules.service.createRoot(alice, OTHER_READING, 'the original', id), // another reading
+    ]
+    for (const clash of clashes) await expect(clash()).rejects.toMatchObject({ status: 409 })
+  })
+})

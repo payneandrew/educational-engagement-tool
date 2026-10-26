@@ -173,6 +173,13 @@ describe('annotation routes', () => {
 
     const missing = await send('POST', '/readings/nope/annotations', 'u-alice', { body: 'hello' })
     expect(missing.status).toBe(404)
+
+    const badId = await send('POST', `/readings/${READING}/annotations`, 'u-alice', {
+      body: 'hello',
+      id: 'not-an-id',
+    })
+    expect(badId.status).toBe(400)
+    expect((await badId.json()).error).toContain('id must be 24 hexadecimal characters')
   })
 })
 

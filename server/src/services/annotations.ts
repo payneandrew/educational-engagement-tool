@@ -1,5 +1,5 @@
 import { HTTPException } from 'hono/http-exception'
-import { ObjectId } from 'mongodb'
+import { MongoServerError, ObjectId } from 'mongodb'
 import { annotations, readings } from '../db'
 import { publish } from '../realtime/events'
 import type { AnnotationDoc, UserDoc } from '../db/models'
@@ -28,8 +28,9 @@ function saved(annotation: AnnotationDoc) {
 const newAnnotation = (
   user: UserDoc,
   fields: Pick<AnnotationDoc, 'readingId' | 'kind' | 'parentId' | 'body'>,
+  id = new ObjectId().toHexString(),
 ): AnnotationDoc => ({
-  _id: new ObjectId().toHexString(),
+  _id: id,
   ...fields,
   authorId: user._id,
   authorName: user.name,
@@ -37,27 +38,46 @@ const newAnnotation = (
   editedAt: null,
 })
 
-export async function createRoot(user: UserDoc, readingId: string, body: string) {
-  if (!(await readings.countDocuments({ _id: readingId }, { limit: 1 })))
-    throw new HTTPException(404, { message: 'reading not found' })
-  const annotation = newAnnotation(user, { readingId, kind: 'root', parentId: null, body })
-  await annotations.insertOne(annotation)
-  return saved(annotation)
+/**
+ * Saves a new post. Ids can come from the client, which makes retries safe: if a post was saved but
+ * its response never arrived, the retry (same id) gets the original back instead of a duplicate. Any
+ * other clash on the id is refused, without revealing the post that holds it.
+ */
+async function insert(annotation: AnnotationDoc) {
+  try {
+    await annotations.insertOne(annotation)
+    return saved(annotation)
+  } catch (error) {
+    if (!(error instanceof MongoServerError && error.code === 11000)) throw error // not a duplicate id
+    const original = await annotations.findOne({ _id: annotation._id })
+    const isRetry =
+      original?.authorId === annotation.authorId &&
+      original.parentId === annotation.parentId &&
+      original.readingId === annotation.readingId &&
+      original.body === annotation.body
+    if (!isRetry) throw new HTTPException(409, { message: 'id already in use' })
+    return toDTO(original) // already published the first time
+  }
 }
 
-export async function createReply(user: UserDoc, parentId: string, body: string) {
+export async function createRoot(user: UserDoc, readingId: string, body: string, id?: string) {
+  if (!(await readings.countDocuments({ _id: readingId }, { limit: 1 })))
+    throw new HTTPException(404, { message: 'reading not found' })
+  return insert(newAnnotation(user, { readingId, kind: 'root', parentId: null, body }, id))
+}
+
+export async function createReply(user: UserDoc, parentId: string, body: string, id?: string) {
   const parent = await annotations.findOne({ _id: parentId })
   if (!parent) throw new HTTPException(404, { message: 'annotation not found' })
   if (parent.kind !== 'root')
     throw new HTTPException(400, { message: 'can only reply to a top-level annotation' })
-  const annotation = newAnnotation(user, {
-    readingId: parent.readingId,
-    kind: 'reply',
-    parentId: parent._id,
-    body,
-  })
-  await annotations.insertOne(annotation)
-  return saved(annotation)
+  return insert(
+    newAnnotation(
+      user,
+      { readingId: parent.readingId, kind: 'reply', parentId: parent._id, body },
+      id,
+    ),
+  )
 }
 
 /** Only the author may change a post. */
