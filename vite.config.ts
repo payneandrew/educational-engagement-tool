@@ -11,7 +11,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    // Same-origin in dev so the hc client can use relative URLs (and SSE needs no CORS).
-    proxy: { '/api': 'http://localhost:3001' },
+    // Same-origin in dev, so neither the API client nor the socket needs CORS.
+    proxy: {
+      '/api': 'http://localhost:3001',
+      '/socket.io': { target: 'ws://localhost:3001', ws: true },
+    },
   },
 })

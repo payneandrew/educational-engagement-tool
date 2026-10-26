@@ -4,7 +4,7 @@ import { annotations, readings } from '../db'
 import { publish } from '../realtime/events'
 import type { AnnotationDoc, UserDoc } from '../db/models'
 
-/** Wire shape for REST and SSE. Inferred types flow from here to the Vue app via Hono RPC. */
+/** Wire shape for REST and Socket.IO. Inferred types flow from here to the Vue app via Hono RPC. */
 export type AnnotationDTO = Omit<AnnotationDoc, '_id' | 'createdAt' | 'editedAt'> & {
   id: string
   createdAt: string
@@ -19,9 +19,9 @@ export const toDTO = ({ _id, createdAt, editedAt, ...rest }: AnnotationDoc): Ann
 })
 
 /** Every write tells the reading's live viewers what changed, after it has been saved. */
-function saved(annotation: AnnotationDoc) {
+function saved(annotation: AnnotationDoc, type: 'created' | 'updated') {
   const dto = toDTO(annotation)
-  publish(annotation.readingId, { type: 'annotation', annotation: dto })
+  publish({ type, annotation: dto })
   return dto
 }
 
@@ -42,7 +42,7 @@ export async function createRoot(user: UserDoc, readingId: string, body: string)
     throw new HTTPException(404, { message: 'reading not found' })
   const annotation = newAnnotation(user, { readingId, kind: 'root', parentId: null, body })
   await annotations.insertOne(annotation)
-  return saved(annotation)
+  return saved(annotation, 'created')
 }
 
 export async function createReply(user: UserDoc, parentId: string, body: string) {
@@ -57,7 +57,7 @@ export async function createReply(user: UserDoc, parentId: string, body: string)
     body,
   })
   await annotations.insertOne(annotation)
-  return saved(annotation)
+  return saved(annotation, 'created')
 }
 
 /** Only the author may change a post. */
@@ -77,7 +77,7 @@ export async function editAnnotation(user: UserDoc, id: string, body: string) {
     { returnDocument: 'after' },
   )
   if (!updated) throw new HTTPException(404, { message: 'annotation not found' }) // deleted between the check and the update
-  return saved(updated)
+  return saved(updated, 'updated')
 }
 
 /**
@@ -88,7 +88,7 @@ export async function editAnnotation(user: UserDoc, id: string, body: string) {
 export async function deleteAnnotation(user: UserDoc, id: string) {
   const annotation = await loadOwn(user, id)
   await annotations.deleteMany({ $or: [{ _id: id }, { parentId: id }] })
-  publish(annotation.readingId, { type: 'deleted', id })
+  publish({ type: 'deleted', id, readingId: annotation.readingId })
   return { id }
 }
 

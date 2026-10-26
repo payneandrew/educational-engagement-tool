@@ -1,22 +1,25 @@
 import { computed, inject, onScopeDispose, provide, reactive, ref, type InjectionKey } from 'vue'
-import type { AnnotationEvent, ReadingEvent } from '../../../server/src/realtime/events'
+import type { AnnotationEvent } from '../../../server/src/realtime/events'
 import { client, messageOf, unwrap, type Annotation } from '@/api/client'
 import { currentUserId } from '@/api/session'
+import { ensureConnected, socket } from '@/api/socket'
 
 /**
  * One reading's discussion: the annotations, the live connection, and the actions that change them.
  * The reading page creates it with `provideAnnotations`; components below it get it with `useAnnotations`.
  *
- * Every time the SSE stream (re)connects we load the full list from the API, then apply live events
- * on top. Loading on reconnect covers anything missed while disconnected, so the server never needs
- * to replay history. Events that arrive while a load is in flight are held back and applied after it,
- * so a slow response can't overwrite a newer edit or bring back a deleted post.
+ * Live updates come over the tab's shared Socket.IO connection. On mount (and on any reconnect the
+ * server couldn't recover) we subscribe to the reading, then load the full list over REST and apply
+ * live events on top. When the server *does* recover a short drop, it has already put us back in the
+ * room and replayed what we missed, so there's nothing to reload. Events that arrive while a load is
+ * in flight are held back and applied after it, so a slow response can't overwrite a newer edit or
+ * bring back a deleted post.
  */
 function createAnnotations(readingId: string) {
   const byId = reactive<Record<string, Annotation>>({})
-  /** True only after an established stream drops, so the first connect doesn't flash a warning. */
+  /** True only after an established connection drops, so the first connect doesn't flash a warning. */
   const connectionLost = ref(false)
-  /** Who has this reading open right now, from the server's `viewers` events. */
+  /** Who has this reading open right now, from the server's `reading:viewers` events. */
   const viewers = ref<{ id: string; name: string }[]>([])
   const loadError = ref('')
   /** True until the first load finishes. Reloads after a reconnect keep showing the current list. */
@@ -25,20 +28,17 @@ function createAnnotations(readingId: string) {
   const newIds = reactive(new Set<string>())
   /** Read out by an aria-live region, so screen reader users hear about live arrivals too. */
   const announcement = ref('')
-  let eventSource: EventSource | undefined
-  let retryTimer: ReturnType<typeof setTimeout> | undefined
-  let disposed = false
   let pending: AnnotationEvent[] | null = null // non-null while a load is in flight
 
   function applyEvent(event: AnnotationEvent) {
-    if (event.type === 'annotation') byId[event.annotation.id] = event.annotation
+    if (event.type !== 'deleted') byId[event.annotation.id] = event.annotation
     // Deleting a top-level annotation also deleted its replies.
     else
       for (const annotation of Object.values(byId))
         if (annotation.id === event.id || annotation.parentId === event.id)
           delete byId[annotation.id]
   }
-  /** A live post someone else just wrote (not an edit, and not the echo of this user's own write). */
+  /** A live post someone else just wrote (not the echo of this user's own write). */
   function noteArrival({ id, authorId, authorName, kind }: Annotation) {
     if (loading.value || byId[id] || authorId === currentUserId.value) return
     newIds.add(id)
@@ -49,9 +49,19 @@ function createAnnotations(readingId: string) {
     else applyEvent(event)
   }
 
-  async function load() {
+  const subscription = { type: 'reading', readingId } as const
+
+  /** Join the reading's room; the server acknowledges once we're in (or says why not). */
+  async function subscribe() {
+    const result = await socket.timeout(10_000).emitWithAck('subscribe', subscription)
+    if (!result.ok) throw new Error(result.error)
+  }
+
+  /** Subscribe first, then fetch: anything written after the fetch starts arrives as a live event. */
+  async function resync() {
     pending = []
     try {
+      await subscribe()
       const list = await unwrap(
         await client.api.readings[':id'].annotations.$get({ param: { id: readingId } }),
       )
@@ -68,38 +78,63 @@ function createAnnotations(readingId: string) {
     }
   }
 
-  function connect() {
-    if (disposed) return
-    // EventSource can't send headers, so the user id goes in the query string.
-    const url = client.api.readings[':id'].stream.$url({ param: { id: readingId } })
-    url.searchParams.set('uid', currentUserId.value)
-    eventSource = new EventSource(url)
-    eventSource.onopen = () => {
-      connectionLost.value = false
-      void load()
-    }
-    // Each message is one ReadingEvent, serialized by the server's stream route.
-    eventSource.onmessage = (message: MessageEvent<string>) => {
-      const event = JSON.parse(message.data) as ReadingEvent
-      if (event.type === 'viewers') viewers.value = event.viewers
-      else {
-        if (event.type === 'annotation') noteArrival(event.annotation)
-        receive(event)
-      }
-    }
-    eventSource.onerror = () => {
-      connectionLost.value = true
-      // While CONNECTING the browser retries by itself. If it gave up (CLOSED, e.g. the server answered
-      // with an error status), open a fresh stream ourselves.
-      if (eventSource?.readyState === EventSource.CLOSED) retryTimer = setTimeout(connect, 3000)
+  // The socket is shared across pages, so ignore events for other readings.
+  const isHere = (payload: { readingId: string }) => payload.readingId === readingId
+  const onCreated = (annotation: Annotation) => {
+    if (!isHere(annotation)) return
+    noteArrival(annotation)
+    receive({ type: 'created', annotation })
+  }
+  const onUpdated = (annotation: Annotation) => {
+    if (isHere(annotation)) receive({ type: 'updated', annotation })
+  }
+  const onDeleted = (deleted: { id: string; readingId: string }) => {
+    if (isHere(deleted)) receive({ type: 'deleted', ...deleted })
+  }
+  const onViewers = (update: { readingId: string; viewers: { id: string; name: string }[] }) => {
+    if (isHere(update)) viewers.value = update.viewers
+  }
+  const onConnect = () => {
+    connectionLost.value = false
+    // Recovered: the server restored our rooms and replayed missed events. Otherwise start over.
+    if (!socket.recovered) void resync()
+  }
+  const onDisconnect = (reason: string) => {
+    if (reason === 'io client disconnect') return // we closed it on purpose (switching user)
+    connectionLost.value = true
+    // Socket.IO retries on its own, except when the server ended the connection deliberately.
+    if (reason === 'io server disconnect') socket.connect()
+  }
+  const onConnectError = (error: Error) => {
+    if (socket.active)
+      connectionLost.value = true // a network problem; it keeps retrying
+    else {
+      // The server refused the handshake (e.g. unknown user); retrying won't help.
+      loadError.value = error.message
+      loading.value = false
     }
   }
-  connect()
+
+  socket.on('annotation:created', onCreated)
+  socket.on('annotation:updated', onUpdated)
+  socket.on('annotation:deleted', onDeleted)
+  socket.on('reading:viewers', onViewers)
+  socket.on('connect', onConnect)
+  socket.on('disconnect', onDisconnect)
+  socket.on('connect_error', onConnectError)
+  // Already connected (another page opened the socket): subscribe now. Otherwise `connect` will.
+  if (socket.connected) void resync()
+  else ensureConnected()
 
   onScopeDispose(() => {
-    disposed = true
-    eventSource?.close()
-    clearTimeout(retryTimer)
+    socket.off('annotation:created', onCreated)
+    socket.off('annotation:updated', onUpdated)
+    socket.off('annotation:deleted', onDeleted)
+    socket.off('reading:viewers', onViewers)
+    socket.off('connect', onConnect)
+    socket.off('disconnect', onDisconnect)
+    socket.off('connect_error', onConnectError)
+    if (socket.connected) socket.emit('unsubscribe', subscription)
   })
 
   const all = computed(() => Object.values(byId))
@@ -135,7 +170,7 @@ function createAnnotations(readingId: string) {
 
   /**
    * Runs one of this user's writes and applies the result right away, so the author sees it without
-   * waiting for the SSE event (which arrives too and just sets the same values again). It goes through
+   * waiting for the live event (which arrives too and just sets the same values again). It goes through
    * `receive`, like a live event, so the same ordering rules hold. Resolves to an error message, or null.
    */
   async function write(request: () => Promise<AnnotationEvent>): Promise<string | null> {
@@ -152,7 +187,7 @@ function createAnnotations(readingId: string) {
 
   const create = (body: string) =>
     write(async () => ({
-      type: 'annotation',
+      type: 'created',
       annotation: await unwrap(
         await client.api.readings[':id'].annotations.$post({
           param: { id: readingId },
@@ -162,7 +197,7 @@ function createAnnotations(readingId: string) {
     }))
   const reply = (rootId: string, body: string) =>
     write(async () => ({
-      type: 'annotation',
+      type: 'created',
       annotation: await unwrap(
         await client.api.annotations[':id'].replies.$post({
           param: { id: rootId },
@@ -172,7 +207,7 @@ function createAnnotations(readingId: string) {
     }))
   const edit = (id: string, body: string) =>
     write(async () => ({
-      type: 'annotation',
+      type: 'updated',
       annotation: await unwrap(
         await client.api.annotations[':id'].$patch({ param: { id }, json: { body } }),
       ),
@@ -181,6 +216,7 @@ function createAnnotations(readingId: string) {
     write(async () => ({
       type: 'deleted',
       id: (await unwrap(await client.api.annotations[':id'].$delete({ param: { id } }))).id,
+      readingId,
     }))
 
   return {

@@ -26,15 +26,16 @@ Other commands: `npm run seed` resets the database to the sample data (`server/s
 
 ```
 Vue ──REST (typed hc client)──▶ Hono ──▶ MongoDB
- ▲                                │
- └──── SSE, one per open reading ◀┘ in-process event bus (realtime/events.ts)
+ ▲                                │ annotation service publishes a domain event (realtime/events.ts)
+ │                                ▼
+ └── Socket.IO, one per tab ◀── realtime/socket.ts: emits to the reading's room
 ```
 
 - **Typed API with no codegen.** Each router in `server/src/routes/` is one chained Hono expression, and `server/src/app.ts` mounts them with a chained `.route()` and exports the resulting type; `web/src/api/client.ts` builds a client from it with `hc<AppType>`, so request and response types are checked end to end. Request bodies are validated with Zod (`schemas.ts`, via `middleware/validate.ts`), and failures come back as `{ error }` with a readable message.
 - **Roles.** No real auth: the client sends the chosen user id (`x-user-id`) and the server looks the user up. Anyone can read. Creating a reading is instructor-only, posting is student-only, and editing or deleting is author-only (403 otherwise).
-- **Live updates.** After each successful write, the annotation service publishes an event (`annotation` or `deleted`) on an in-process `EventEmitter`, keyed by reading. Each open SSE stream subscribes to its reading and forwards those events.
+- **Live updates (Socket.IO).** Each tab opens one WebSocket and subscribes to the readings it shows (`subscribe { type: 'reading', readingId }`, acknowledged by the server); each reading is a room. Writes stay on REST. After a write is saved, the annotation service publishes a domain event (`created`, `updated` or `deleted`) on an in-process bus that knows nothing about sockets, and `realtime/socket.ts` emits it to that reading's room as `annotation:created` / `annotation:updated` / `annotation:deleted`. Event names and payloads are typed in `realtime/protocol.ts`, which the client imports, like `AppType` for REST. Presence (`reading:viewers`) is the room's membership, each person counted once however many tabs they have.
 - **Counts.** `GET /api/readings` runs one aggregation over `annotations`, grouped by reading, that counts annotations (replies included) and collects distinct authors. Only students can post, so distinct authors = students participating. Nothing is stored, so counts can't drift out of date. On a reading's page the instructor's counts are computed from the live feed instead, so they update as students post.
-- **Reconnects.** Whenever the stream (re)connects, the client reloads the reading's annotations over REST, so anything missed while disconnected is picked up without the server replaying history. Events that arrive during that reload are held and applied after it, so a slow response can't undo a newer change. A banner shows while the connection is down.
+- **Reconnects.** Two layers. For short drops (under two minutes), Socket.IO's _connection state recovery_ puts the socket back in its rooms and replays the events it missed; the client sees `socket.recovered` and does nothing else. After a longer gap or a server restart (recovery state is in memory), the client subscribes again and reloads the reading's annotations over REST. Events that arrive during that reload are held and applied after it, so a slow response can't undo a newer change. A banner shows while the connection is down.
 
 ## Interface
 
@@ -60,8 +61,8 @@ Vue ──REST (typed hc client)──▶ Hono ──▶ MongoDB
 
 ## Tradeoffs
 
-- **The event bus lives in one process.** With several API servers, a write on one wouldn't reach viewers connected to another. To scale out, publish through Redis pub/sub or a MongoDB change stream instead; `realtime/events.ts` is the only file that changes.
-- **SSE rather than WebSockets.** Updates only flow server → client (writes are ordinary REST calls), and the browser's `EventSource` reconnects on its own. WebSockets would be worth it for chatty two-way features like presence or typing indicators.
+- **One process.** Rooms and the recovery buffer use Socket.IO's in-memory adapter, so a write on one API server wouldn't reach sockets on another. To scale out, add an adapter that shares both: the Redis Streams adapter does, and it keeps connection state recovery working across servers. Nothing else changes, because the services only publish domain events.
+- **Socket.IO, WebSocket only.** An earlier version used Server-Sent Events, which fit one-way updates with no extra dependency. Socket.IO adds rooms, acknowledged subscriptions, replay after short drops, a clean place for future two-way features (typing indicators, "who's replying"), and a scale-out path through adapters. Long-polling is turned off, so a load balancer needs no sticky sessions; the cost is no fallback on networks that block WebSockets.
 - **No real auth**, as the exercise allows: anyone can claim any user id.
 
 ## Project layout
@@ -72,15 +73,16 @@ Server routes follow Hono's guide for larger apps (one router per resource, moun
 server/src/
   index.ts          entry point: connect, seed an empty database, start the server
   app.ts            mounts the routers and auth, exports AppType for the client
-  routes/           users, readings (incl. a reading's annotations and stream), annotations, participation
+  routes/           users, readings (incl. a reading's annotations), annotations, participation
   middleware/       auth (user lookup, role checks), validate (Zod with a uniform error body)
   services/         readings, annotations, participation: the logic and database access
-  realtime/         events (in-process pub/sub and presence), stream (the SSE endpoint)
+  realtime/         events (domain events from the services), socket (Socket.IO server: rooms,
+                    presence, recovery), protocol (the typed socket events, shared with the client)
   db/               connection, collections and indexes; models (document types)
   seed/             base seed and demo data
   schemas.ts        request body schemas
 web/src/
-  api/              typed hc client, error handling, current user (session)
+  api/              typed hc client, the shared Socket.IO connection, error handling, current user
   views/            pages: reading list, reading, participation
   components/       discussion feed and a single post
   composables/      useAnnotations: a reading's live discussion and its actions
@@ -95,7 +97,8 @@ Tests sit next to the code they cover (`*.test.ts`).
 
 `npm test` runs Vitest; the server tests use a throwaway MongoDB:
 
-- `server/src/app.test.ts` calls the real app over HTTP (auth, role middleware, validation): `GET /api/readings` returns the right annotation and student counts per reading (replies included, zero for an untouched reading); `POST /api/readings` lets instructors create (input trimmed, new reading listed first) and gives students 403, unknown users 401, and a blank title or description 400; annotation routes let students post and anyone read, give instructors 403 on every write, and reject empty annotations (400) and unknown readings (404); and the live stream opens immediately and pushes new annotations to a connected client.
+- `server/src/app.test.ts` calls the real app over HTTP (auth, role middleware, validation): `GET /api/readings` returns the right annotation and student counts per reading (replies included, zero for an untouched reading); `POST /api/readings` lets instructors create (input trimmed, new reading listed first) and gives students 403, unknown users 401, and a blank title or description 400; annotation routes let students post and anyone read, give instructors 403 on every write, and reject empty annotations (400) and unknown readings (404).
+- `server/src/realtime/socket.test.ts` runs a real HTTP server with Socket.IO attached and drives it with the real client: handshakes naming an unknown user are refused; subscriptions are acknowledged, and unknown readings or malformed payloads are refused with a reason; created, updated and deleted events reach that reading's room and no other, and stop after unsubscribing; presence counts each person once across tabs; and a client that drops briefly is recovered, receiving a post made while it was offline without subscribing again, while a deliberate disconnect starts over.
 - `server/src/services/annotations.test.ts` covers the annotation service: events reach only that reading's subscribers, edits are published and marked edited, deleting a root deletes its replies (and publishes one `deleted` event with just the root's id), only authors can edit or delete, replies are one level deep, listing is newest first, and empty annotations are rejected.
 - `web/src/api/errors.test.ts` covers how the frontend turns failures into messages: the API's own `{ error }` text, a readable message for empty or non-JSON error bodies (like the empty 502 Vite's proxy sends while the API restarts), and a network failure.
 - `web/src/utils/search.test.ts` covers the reading search: matching any part of a title regardless of case and accents, and an empty search matching everything.

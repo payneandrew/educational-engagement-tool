@@ -1,7 +1,7 @@
 {
   "name": "educational-engagement-tool",
   "version": "0.1.0",
-  "description": "Gloss: a collaborative reading app (Vue 3, Hono RPC, MongoDB, SSE)",
+  "description": "Gloss: a collaborative reading app (Vue 3, Hono RPC, MongoDB, Socket.IO)",
   "private": true,
   "type": "module",
   "engines": {
@@ -30,6 +30,8 @@
     "mongodb": "^7.7.0",
     "primeicons": "^7.0.0",
     "primevue": "^4.5.5",
+    "socket.io": "^4.8.4",
+    "socket.io-client": "^4.8.4",
     "vue": "^3.5.44",
     "zod": "^4.6.7"
   },

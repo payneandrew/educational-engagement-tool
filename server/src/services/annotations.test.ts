@@ -1,6 +1,6 @@
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import type { ReadingEvent } from '../realtime/events'
+import type { AnnotationEvent } from '../realtime/events'
 
 // Real (throwaway) MongoDB. Imports are dynamic so MONGO_URI is set before db.ts reads it.
 let mongod: MongoMemoryServer
@@ -17,8 +17,10 @@ const bob = { _id: 'u-bob', name: 'Bob Okafor', role: 'student' } as const
 
 /** Collects the events published for one reading. */
 function listen(readingId: string) {
-  const got: ReadingEvent[] = []
-  const stop = modules.events.subscribe(readingId, (event) => got.push(event))
+  const got: AnnotationEvent[] = []
+  const stop = modules.events.onAnnotationEvent((event) => {
+    if (modules.events.readingIdOf(event) === readingId) got.push(event)
+  })
   return { got, stop }
 }
 
@@ -48,7 +50,7 @@ describe('live events', () => {
     const here = listen(READING)
     const elsewhere = listen(OTHER_READING)
     const created = await modules.service.createRoot(alice, READING, 'only for this reading')
-    expect(here.got).toEqual([{ type: 'annotation', annotation: created }])
+    expect(here.got).toEqual([{ type: 'created', annotation: created }])
     expect(elsewhere.got).toEqual([])
     here.stop()
     elsewhere.stop()
@@ -60,10 +62,10 @@ describe('live events', () => {
     await modules.service.editAnnotation(alice, root.id, 'revised wording')
     expect(got).toHaveLength(1)
     expect(got[0]).toMatchObject({
-      type: 'annotation',
+      type: 'updated',
       annotation: { id: root.id, body: 'revised wording' },
     })
-    expect(got[0].type === 'annotation' && got[0].annotation.editedAt).toBeTruthy()
+    expect(got[0].type === 'updated' && got[0].annotation.editedAt).toBeTruthy()
     stop()
   })
 
@@ -83,7 +85,7 @@ describe('delete', () => {
 
     await modules.service.deleteAnnotation(alice, root.id)
 
-    expect(got).toEqual([{ type: 'deleted', id: root.id }]) // one event; clients drop the replies
+    expect(got).toEqual([{ type: 'deleted', id: root.id, readingId: READING }]) // one event; clients drop the replies
     expect(await modules.service.listAnnotations(READING)).toEqual([]) // the root and its reply
     stop()
   })
