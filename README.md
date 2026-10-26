@@ -41,7 +41,7 @@ Vue ──REST (typed hc client)──▶ Hono ──▶ MongoDB
 
 - **Reading page in two panes.** The reading is set like a document (serif, Literata) on the left; the discussion is a sticky panel on the right, newest first, with the composer at the top (⌘/Ctrl + Enter posts). It stacks into one column on phones.
 - **Live without noise.** Posts that arrive from other people while the page is open get a "New" tag, and an `aria-live` region announces them ("New annotation from Alice Chen") for screen reader users. Who else has the reading open shows under it.
-- **Feedback for every action.** Toasts confirm posting, replying, editing, deleting and assigning a reading; deleting asks first (a dialog that says what will be removed); form errors appear next to the form. Loading, empty and not-found states each have their own message.
+- **Feedback for every action.** Toasts confirm posting, replying, editing, deleting and assigning a reading; deleting asks first (a dialog that says what will be removed); form errors appear next to the form. Anything a component doesn't handle itself reaches a global Vue error handler (`app.config.errorHandler`), which logs it and shows a generic error toast. Loading, empty and not-found states each have their own message.
 - **Instructors** see counts on every reading, live counts on the reading page, a student filter on the discussion, and a sortable participation table whose student column stays put while scrolling across readings.
 - **Components and theme.** PrimeVue supplies the interactive components (Select, Dialog, ConfirmDialog, Toast, DataTable, Button, inputs); Tailwind does the layout. There is one palette: an indigo preset on PrimeVue's Aura theme (`web/src/assets/theme.ts`), and the Tailwind tokens (`bg-panel`, `text-muted`, …) point at the same CSS variables. The app is light-only, by choice: one theme to design and check for contrast. The primary and danger colors are one shade darker than Aura's defaults so white text on them meets WCAG AA (4.5:1).
 - **Why PrimeVue 4, not 5.** PrimeVue 5 moved to a commercial license that needs a license key; 4.x is MIT.
@@ -80,8 +80,9 @@ server/src/
   db/               connection, collections and indexes; models (document types)
   seed/             base seed and demo data
   schemas.ts        request body schemas
+  test/             test setup: one MongoDB per run, a database per test file
 web/src/
-  api/              typed hc client, error handling, current user (session)
+  api/              typed hc client, error messages, safe retries for new posts, current user
   views/            pages: reading list, reading, participation
   components/       discussion feed and a single post
   composables/      useAnnotations: a reading's live discussion and its actions
@@ -94,9 +95,10 @@ Tests sit next to the code they cover (`*.test.ts`).
 
 ## Tests
 
-`npm test` runs Vitest; the server tests use a throwaway MongoDB:
+`npm test` runs Vitest. The server tests share one throwaway MongoDB, started once per run, and each test file gets its own database on it, so files can run in parallel without interfering (`server/src/test/`; a test file just calls `useTestDatabase()`):
 
-- `server/src/app.test.ts` calls the real app over HTTP (auth, role middleware, validation): `GET /api/readings` returns the right annotation and student counts per reading (replies included, zero for an untouched reading); `POST /api/readings` lets instructors create (input trimmed, new reading listed first) and gives students 403, unknown users 401, and a blank title or description 400; annotation routes let students post and anyone read, give instructors 403 on every write, and reject empty annotations (400) and unknown readings (404); and the live stream opens immediately and pushes new annotations to a connected client.
-- `server/src/services/annotations.test.ts` covers the annotation service: events reach only that reading's subscribers, edits are published and marked edited, deleting a root deletes its replies (and publishes one `deleted` event with just the root's id), only authors can edit or delete, a retried post with a client-chosen id returns the original rather than a duplicate (and any other reuse of an id is refused), replies are one level deep, listing is newest first, and empty annotations are rejected.
-- `web/src/api/errors.test.ts` covers how the frontend turns failures into messages: the API's own `{ error }` text, a readable message for empty or non-JSON error bodies (like the empty 502 Vite's proxy sends while the API restarts), and a network failure.
+- `server/src/app.test.ts` calls the real app over HTTP (auth, role middleware, validation): `GET /api/readings` returns the right annotation and student counts per reading (replies included, zero for an untouched reading); `POST /api/readings` lets instructors create (input trimmed, new reading listed first) and gives students 403, unknown users 401, and a blank title or description 400; annotation routes let students post and anyone read, give instructors 403 on every write, reject empty or over-5,000-character annotations and edits (400) and unknown readings (404); and an unexpected failure returns a generic 500 without exposing internal details; and the live stream opens immediately and pushes new annotations to a connected client.
+- `server/src/services/annotations.test.ts` covers the annotation service: events reach only that reading's subscribers, edits are published and marked edited, deleting a root deletes its replies (and publishes one `deleted` event with just the root's id), only authors can edit or delete, a retried post with a client-chosen id returns the original rather than a duplicate, even when two copies arrive at once (and any other reuse of an id, by another user, with other words, or in another reading or thread, is refused), replies are one level deep, listing is newest first, and empty annotations are rejected.
+- `web/src/api/errors.test.ts` covers how the frontend turns failures into messages: the API's own `{ error }` text, a readable message for empty or non-JSON error bodies (like the empty 502 Vite's proxy sends while the API restarts), and a network failure; an unexpected error's raw text is never shown. API responses are read with Hono's `parseResponse`, which returns the typed body or throws.
 - `web/src/utils/search.test.ts` covers the reading search: matching any part of a title regardless of case and accents, and an empty search matching everything.
+- `web/src/api/retry.test.ts` covers the client half of safe retries: a request that got no answer is retried after 1s and then 2s, at most three tries, while an answer from the server (even an error) is never retried; new ids are 24 hex characters that pass the server's own validation, and don't repeat.

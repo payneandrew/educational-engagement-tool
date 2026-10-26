@@ -4,7 +4,7 @@ import Message from 'primevue/message'
 import Select from 'primevue/select'
 import Toast from 'primevue/toast'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { client, messageOf, unwrap, type User } from '@/api/client'
+import { client, messageOf, parseResponse, type User } from '@/api/client'
 import { currentUserId } from '@/api/session'
 import UserAvatar from '@/components/UserAvatar.vue'
 import ParticipationView from '@/views/ParticipationView.vue'
@@ -33,7 +33,7 @@ const userGroups = computed(() =>
 onMounted(async () => {
   window.addEventListener('hashchange', onHash)
   try {
-    users.value = await unwrap(await client.api.users.$get())
+    users.value = await parseResponse(client.api.users.$get())
   } catch (error) {
     loadError.value = messageOf(error)
     return

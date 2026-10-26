@@ -1,37 +1,24 @@
-import { MongoMemoryServer } from 'mongodb-memory-server'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { app } from './app'
+import { annotations, users } from './db'
+import { useTestDatabase } from './test/database'
 
 // Exercises the HTTP layer (auth + role middleware + validation) via app.request, no server socket needed.
-let mongod: MongoMemoryServer
-let modules: { app: (typeof import('./app'))['app']; db: typeof import('./db') }
+useTestDatabase()
 
 // async: app.request() is typed `Response | Promise<Response>`; this always returns a Promise.
 const send = async (method: string, path: string, userId: string, json?: unknown) =>
-  modules.app.request(`/api${path}`, {
+  app.request(`/api${path}`, {
     method,
     headers: { 'x-user-id': userId, 'content-type': 'application/json' },
     body: json === undefined ? undefined : JSON.stringify(json),
   })
 const post = (userId: string, json: unknown) => send('POST', '/readings', userId, json)
 
-beforeAll(async () => {
-  mongod = await MongoMemoryServer.create({ binary: { version: '7.0.14' } })
-  process.env.MONGO_URI = mongod.getUri()
-  process.env.HEARTBEAT_MS = '100' // so the heartbeat test needn't wait 25 seconds
-  modules = { app: (await import('./app')).app, db: await import('./db') }
-  await modules.db.initDb()
-  await (await import('./seed')).seed()
-}, 120_000)
-
-afterAll(async () => {
-  await modules.db.mongo.close()
-  await mongod.stop()
-})
-
 describe('GET /readings', () => {
   it('includes each reading’s annotation count (replies included) and unique students', async () => {
     const list: { id: string; annotationCount: number; studentCount: number }[] = await (
-      await modules.app.request('/api/readings', { headers: { 'x-user-id': 'u-dana' } })
+      await app.request('/api/readings', { headers: { 'x-user-id': 'u-dana' } })
     ).json()
     const stats = (id: string) => {
       const { annotationCount, studentCount } = list.find((reading) => reading.id === id)!
@@ -47,7 +34,7 @@ describe('GET /readings', () => {
 // Runs against the plain seed data, before the tests below add annotations.
 describe('GET /participation', () => {
   it('counts every student on every reading, including students who have not posted', async () => {
-    await modules.db.users.insertOne({ _id: 'u-quiet', name: 'Quinn Park', role: 'student' })
+    await users.insertOne({ _id: 'u-quiet', name: 'Quinn Park', role: 'student' })
 
     const res = await send('GET', '/participation', 'u-dana')
     expect(res.status).toBe(200)
@@ -85,7 +72,7 @@ describe('GET /participation', () => {
       },
     ])
 
-    await modules.db.users.deleteOne({ _id: 'u-quiet' })
+    await users.deleteOne({ _id: 'u-quiet' })
   })
 
   it('is for instructors only', async () => {
@@ -112,7 +99,7 @@ describe('POST /readings', () => {
     expect(Date.parse(created.createdAt)).not.toBeNaN()
 
     const list = await (
-      await modules.app.request('/api/readings', { headers: { 'x-user-id': 'u-alice' } })
+      await app.request('/api/readings', { headers: { 'x-user-id': 'u-alice' } })
     ).json()
     expect(list[0].id).toBe(created.id)
   })
@@ -133,6 +120,27 @@ describe('POST /readings', () => {
     const { error } = await res.json()
     expect(error).toContain('title is required')
     expect(error).toContain('description is required')
+  })
+})
+
+describe('unexpected errors', () => {
+  it('answer with a generic 500 that never exposes internal details', async () => {
+    const failure = vi.spyOn(annotations, 'find').mockImplementation(() => {
+      throw new Error('connection pool exhausted at db-7.internal')
+    })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const res = await send('GET', '/readings/natural-selection/annotations', 'u-alice')
+      expect(res.status).toBe(500)
+      // The same { error } shape as every other failure, so the client can always show it.
+      expect(await res.json()).toEqual({
+        error: 'Something went wrong on the server. Please try again.',
+      })
+      expect(log).toHaveBeenCalled() // the details go to the server log instead
+    } finally {
+      failure.mockRestore()
+      log.mockRestore()
+    }
   })
 })
 
@@ -166,6 +174,26 @@ describe('annotation routes', () => {
     }
   })
 
+  it('limits annotations to 5,000 characters, and validates edits like new posts', async () => {
+    const longest = 'x'.repeat(5000)
+    const created = await send('POST', `/readings/${READING}/annotations`, 'u-alice', {
+      body: longest,
+    })
+    expect(created.status).toBe(201)
+    const { id } = await created.json()
+
+    const tooLong = { body: `${longest}x` }
+    const rejected = [
+      await send('POST', `/readings/${READING}/annotations`, 'u-alice', tooLong),
+      await send('PATCH', `/annotations/${id}`, 'u-alice', tooLong),
+      await send('PATCH', `/annotations/${id}`, 'u-alice', { body: '   ' }),
+    ]
+    for (const res of rejected) {
+      expect(res.status).toBe(400)
+      expect((await res.json()).error).toMatch(/^body: /) // names the field, for the UI to show
+    }
+  })
+
   it('rejects an empty annotation and a reading that does not exist', async () => {
     const empty = await send('POST', `/readings/${READING}/annotations`, 'u-alice', { body: '  ' })
     expect(empty.status).toBe(400)
@@ -185,7 +213,7 @@ describe('annotation routes', () => {
 
 /** Opens a reading's live stream as `userId`, the way a browser would. */
 async function openStream(readingId: string, userId: string) {
-  const res = await modules.app.request(`/api/readings/${readingId}/stream`, {
+  const res = await app.request(`/api/readings/${readingId}/stream`, {
     headers: { 'x-user-id': userId },
   })
   const reader = res.body!.getReader()

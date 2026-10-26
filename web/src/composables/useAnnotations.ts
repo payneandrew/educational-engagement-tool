@@ -1,7 +1,8 @@
 import { computed, inject, onScopeDispose, provide, reactive, ref, type InjectionKey } from 'vue'
 import type { AnnotationEvent, ReadingEvent } from '../../../server/src/realtime/events'
-import { client, messageOf, unwrap, type Annotation } from '@/api/client'
+import { client, messageOf, parseResponse, type Annotation } from '@/api/client'
 import { currentUserId } from '@/api/session'
+import { newId, withRetry } from '@/api/retry'
 
 /**
  * One reading's discussion: the annotations, the live connection, and the actions that change them.
@@ -52,8 +53,8 @@ function createAnnotations(readingId: string) {
   async function load() {
     pending = []
     try {
-      const list = await unwrap(
-        await client.api.readings[':id'].annotations.$get({ param: { id: readingId } }),
+      const list = await parseResponse(
+        client.api.readings[':id'].annotations.$get({ param: { id: readingId } }),
       )
       for (const id of Object.keys(byId)) delete byId[id]
       for (const annotation of list) byId[annotation.id] = annotation
@@ -157,8 +158,8 @@ function createAnnotations(readingId: string) {
     return write(async () => ({
       type: 'annotation',
       annotation: await withRetry(async () =>
-        unwrap(
-          await client.api.readings[':id'].annotations.$post({
+        parseResponse(
+          client.api.readings[':id'].annotations.$post({
             param: { id: readingId },
             json: { body, id },
           }),
@@ -171,8 +172,8 @@ function createAnnotations(readingId: string) {
     return write(async () => ({
       type: 'annotation',
       annotation: await withRetry(async () =>
-        unwrap(
-          await client.api.annotations[':id'].replies.$post({
+        parseResponse(
+          client.api.annotations[':id'].replies.$post({
             param: { id: rootId },
             json: { body, id },
           }),
@@ -183,14 +184,14 @@ function createAnnotations(readingId: string) {
   const edit = (id: string, body: string) =>
     write(async () => ({
       type: 'annotation',
-      annotation: await unwrap(
-        await client.api.annotations[':id'].$patch({ param: { id }, json: { body } }),
+      annotation: await parseResponse(
+        client.api.annotations[':id'].$patch({ param: { id }, json: { body } }),
       ),
     }))
   const remove = (id: string) =>
     write(async () => ({
       type: 'deleted',
-      id: (await unwrap(await client.api.annotations[':id'].$delete({ param: { id } }))).id,
+      id: (await parseResponse(client.api.annotations[':id'].$delete({ param: { id } }))).id,
     }))
 
   return {
@@ -210,27 +211,6 @@ function createAnnotations(readingId: string) {
     reply,
     edit,
     remove,
-  }
-}
-
-/** A new post's id, made in the browser: the same format as the server's ids (24 hex characters). */
-const newId = () =>
-  Array.from(crypto.getRandomValues(new Uint8Array(12)), (byte) =>
-    byte.toString(16).padStart(2, '0'),
-  ).join('')
-
-/**
- * Retries a request that got no answer at all (fetch rejects with a TypeError), up to three tries.
- * Only for requests the server recognises as repeats, like posts with a client-made id.
- */
-async function withRetry<T>(request: () => Promise<T>): Promise<T> {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      return await request()
-    } catch (error) {
-      if (!(error instanceof TypeError) || attempt === 3) throw error
-      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
-    }
   }
 }
 

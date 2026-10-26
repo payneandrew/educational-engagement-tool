@@ -4,7 +4,7 @@ import DataTable from 'primevue/datatable'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import { computed, onMounted, ref } from 'vue'
-import { client, messageOf, unwrap, type Participation } from '@/api/client'
+import { client, messageOf, parseResponse, type Participation } from '@/api/client'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { plural } from '@/utils/format'
 
@@ -13,7 +13,7 @@ const loadError = ref('')
 
 onMounted(async () => {
   try {
-    data.value = await unwrap(await client.api.participation.$get())
+    data.value = await parseResponse(client.api.participation.$get())
   } catch (e) {
     loadError.value = messageOf(e)
   }

@@ -9,7 +9,7 @@ import Skeleton from 'primevue/skeleton'
 import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import { computed, onMounted, ref } from 'vue'
-import { client, messageOf, unwrap, type Reading } from '@/api/client'
+import { client, messageOf, parseResponse, type Reading } from '@/api/client'
 import { formatDate, plural } from '@/utils/format'
 import { titleMatches } from '@/utils/search'
 
@@ -26,7 +26,7 @@ const matchingReadings = computed(
 
 onMounted(async () => {
   try {
-    readings.value = await unwrap(await client.api.readings.$get())
+    readings.value = await parseResponse(client.api.readings.$get())
   } catch (error) {
     loadError.value = messageOf(error)
   }
@@ -48,8 +48,8 @@ async function create() {
   busy.value = true
   formError.value = ''
   try {
-    const created = await unwrap(
-      await client.api.readings.$post({
+    const created = await parseResponse(
+      client.api.readings.$post({
         json: { title: title.value, description: description.value },
       }),
     )

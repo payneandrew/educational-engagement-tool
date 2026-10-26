@@ -3,7 +3,7 @@ import AvatarGroup from 'primevue/avatargroup'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import { computed, onMounted, ref } from 'vue'
-import { client, messageOf, unwrap, type ReadingDetail } from '@/api/client'
+import { client, messageOf, parseResponse, type ReadingDetail } from '@/api/client'
 import { currentUserId } from '@/api/session'
 import AnnotationFeed from '@/components/AnnotationFeed.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
@@ -25,8 +25,8 @@ const {
 
 onMounted(async () => {
   try {
-    reading.value = await unwrap(
-      await client.api.readings[':id'].$get({ param: { id: props.readingId } }),
+    reading.value = await parseResponse(
+      client.api.readings[':id'].$get({ param: { id: props.readingId } }),
     )
   } catch (error) {
     loadError.value = messageOf(error)
