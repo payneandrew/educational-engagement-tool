@@ -1,6 +1,11 @@
 <script setup lang="ts">
+import Column from 'primevue/column'
+import DataTable from 'primevue/datatable'
+import Message from 'primevue/message'
+import Skeleton from 'primevue/skeleton'
 import { computed, onMounted, ref } from 'vue'
 import { client, messageOf, unwrap, type Participation } from '@/api/client'
+import UserAvatar from '@/components/UserAvatar.vue'
 import { plural } from '@/utils/format'
 
 const data = ref<Participation | null>(null)
@@ -14,6 +19,15 @@ onMounted(async () => {
   }
 })
 
+/** One flat row per student (DataTable sorts by field), with a `r<index>` count per reading. */
+const rows = computed(
+  () =>
+    data.value?.students.map((student) => ({
+      ...student,
+      ...Object.fromEntries(student.perReading.map((count, index) => [`r${index}`, count])),
+    })) ?? [],
+)
+
 /** Students with no annotations anywhere: the ones an instructor most needs to notice. */
 const notStarted = computed(
   () => data.value?.students.filter((student) => student.total === 0) ?? [],
@@ -21,81 +35,84 @@ const notStarted = computed(
 </script>
 
 <template>
-  <div class="mx-auto max-w-5xl px-4 py-5">
-    <h2 class="text-2xl font-bold">Participation</h2>
-    <p class="mb-4 text-sm text-muted">
-      Annotations (replies included) by each student on each reading.
+  <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+    <h1 class="text-2xl font-semibold">Participation</h1>
+    <p class="mb-6 text-muted">
+      Annotations (replies included) by each student on each reading. Select a column to sort.
     </p>
 
-    <p v-if="loadError" class="text-sm text-red-600 dark:text-red-400">{{ loadError }}</p>
-    <p v-else-if="!data" class="text-sm text-muted" role="status">Loading participation…</p>
-    <p v-else-if="!data.students.length" class="text-sm text-muted">No students yet.</p>
-    <p v-else-if="!data.readings.length" class="text-sm text-muted">
+    <Message v-if="loadError" severity="error" icon="pi pi-exclamation-circle">
+      {{ loadError }}
+    </Message>
+    <Skeleton v-else-if="!data" height="24rem" border-radius="0.75rem" />
+    <p v-else-if="!data.students.length" class="text-muted">No students yet.</p>
+    <p v-else-if="!data.readings.length" class="text-muted">
       No readings yet. Create one from the Readings page.
     </p>
     <template v-else>
-      <p
-        v-if="notStarted.length"
-        class="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
-      >
+      <Message v-if="notStarted.length" severity="warn" icon="pi pi-flag" class="mb-4">
         {{ plural(notStarted.length, 'student') }}
         {{ notStarted.length === 1 ? 'hasn’t' : 'haven’t' }} annotated any reading yet:
         {{ notStarted.map((student) => student.name).join(', ') }}.
-      </p>
+      </Message>
 
-      <!-- Scrolls sideways on narrow screens; the student column stays put. -->
-      <div class="overflow-x-auto rounded-lg border border-line bg-panel">
-        <table class="w-full border-collapse text-sm">
-          <caption class="sr-only">
-            Annotations per student per reading
-          </caption>
-          <thead>
-            <tr class="border-b border-line text-left text-xs tracking-wide text-muted uppercase">
-              <th scope="col" class="sticky left-0 bg-panel px-3 py-2 font-semibold">Student</th>
-              <th
-                v-for="reading in data.readings"
-                :key="reading.id"
-                scope="col"
-                class="max-w-40 min-w-32 px-3 py-2 text-center font-semibold normal-case"
-              >
-                <a
-                  :href="`#/reading/${reading.id}`"
-                  class="line-clamp-2 text-accent hover:underline"
-                >
-                  {{ reading.title }}
-                </a>
-              </th>
-              <th scope="col" class="px-3 py-2 text-center font-semibold">Total</th>
-              <th scope="col" class="px-3 py-2 text-center font-semibold">Readings</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="student in data.students"
-              :key="student.id"
-              class="border-b border-line last:border-0"
-            >
-              <th
-                scope="row"
-                class="sticky left-0 bg-panel px-3 py-2 text-left font-medium whitespace-nowrap"
-              >
+      <div class="overflow-hidden rounded-xl border border-line">
+        <DataTable
+          :value="rows"
+          data-key="id"
+          scrollable
+          sort-field="name"
+          :sort-order="1"
+          removable-sort
+          striped-rows
+          table-class="text-sm"
+          aria-label="Annotations per student per reading"
+        >
+          <!-- Student, total and coverage stay on the left (the student column is frozen when
+               scrolling sideways), so the summary is always visible however many readings there are. -->
+          <Column field="name" header="Student" sortable frozen class="min-w-52">
+            <template #body="{ data: student }">
+              <span class="flex items-center gap-2.5 font-medium">
+                <UserAvatar :id="student.id" :name="student.name" />
                 {{ student.name }}
-              </th>
-              <td
-                v-for="(count, index) in student.perReading"
-                :key="data.readings[index].id"
-                class="px-3 py-2 text-center tabular-nums"
-                :class="count === 0 && 'text-amber-700 dark:text-amber-400'"
-              >
-                {{ count === 0 ? '–' : count }}
-              </td>
-              <td class="px-3 py-2 text-center font-semibold tabular-nums">{{ student.total }}</td>
-              <td class="px-3 py-2 text-center text-muted tabular-nums">
+              </span>
+            </template>
+          </Column>
+          <Column
+            field="total"
+            header="Total"
+            sortable
+            class="text-center font-semibold tabular-nums"
+          />
+          <Column field="readingsParticipated" header="Readings" sortable class="min-w-28">
+            <template #body="{ data: student }">
+              <span :class="student.readingsParticipated === 0 && 'text-amber-700'">
                 {{ student.readingsParticipated }} of {{ data.readings.length }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </span>
+            </template>
+          </Column>
+          <Column
+            v-for="(reading, index) in data.readings"
+            :key="reading.id"
+            :field="`r${index}`"
+            sortable
+            class="min-w-36 text-center tabular-nums"
+          >
+            <template #header>
+              <a
+                :href="`#/reading/${reading.id}`"
+                class="line-clamp-2 text-left font-semibold text-accent hover:underline"
+                :title="reading.title"
+              >
+                {{ reading.title }}
+              </a>
+            </template>
+            <template #body="{ data: student }">
+              <span v-if="student[`r${index}`]">{{ student[`r${index}`] }}</span>
+              <span v-else class="text-amber-700" aria-label="none">–</span>
+            </template>
+          </Column>
+        </DataTable>
       </div>
     </template>
   </div>

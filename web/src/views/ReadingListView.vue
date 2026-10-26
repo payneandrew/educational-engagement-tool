@@ -1,10 +1,20 @@
 <script setup lang="ts">
+import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
+import IconField from 'primevue/iconfield'
+import InputIcon from 'primevue/inputicon'
+import InputText from 'primevue/inputtext'
+import Message from 'primevue/message'
+import Skeleton from 'primevue/skeleton'
+import Textarea from 'primevue/textarea'
+import { useToast } from 'primevue/usetoast'
 import { computed, onMounted, ref } from 'vue'
 import { client, messageOf, unwrap, type Reading } from '@/api/client'
-import { plural } from '@/utils/format'
+import { formatDate, plural } from '@/utils/format'
 import { titleMatches } from '@/utils/search'
 
 const props = defineProps<{ canCreate: boolean }>()
+const toast = useToast()
 
 const readings = ref<Reading[] | null>(null)
 const loadError = ref('')
@@ -14,13 +24,6 @@ const matchingReadings = computed(
   () => readings.value?.filter((reading) => titleMatches(reading.title, search.value)) ?? [],
 )
 
-const formOpen = ref(false)
-const title = ref('')
-const description = ref('')
-const busy = ref(false)
-const formError = ref('')
-const success = ref('')
-
 onMounted(async () => {
   try {
     readings.value = await unwrap(await client.api.readings.$get())
@@ -29,9 +32,16 @@ onMounted(async () => {
   }
 })
 
-function openForm() {
-  formOpen.value = true
-  success.value = ''
+// "New reading" dialog (instructors).
+const dialogOpen = ref(false)
+const title = ref('')
+const description = ref('')
+const busy = ref(false)
+const formError = ref('')
+
+function openDialog() {
+  formError.value = ''
+  dialogOpen.value = true
 }
 
 async function create() {
@@ -45,118 +55,155 @@ async function create() {
     )
     readings.value = [created, ...(readings.value ?? [])] // the list is newest first
     search.value = '' // so the new reading isn't hidden by an old search
-    success.value = `“${created.title}” has been assigned.`
     title.value = ''
     description.value = ''
-    formOpen.value = false
+    dialogOpen.value = false
+    toast.add({
+      severity: 'success',
+      summary: 'Reading assigned',
+      detail: `Students can now discuss “${created.title}”.`,
+      life: 4000,
+    })
   } catch (error) {
     formError.value = messageOf(error)
   } finally {
     busy.value = false
   }
 }
-
-const formatDate = (iso: string) => new Date(iso).toLocaleDateString([], { dateStyle: 'medium' })
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-4 py-5">
-    <div class="mb-4 flex items-center">
-      <h2 class="flex-1 text-2xl font-bold">Readings</h2>
-      <button v-if="props.canCreate && !formOpen" class="btn btn-primary" @click="openForm">
-        New reading
-      </button>
+  <div class="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+    <div class="mb-6 flex flex-wrap items-end gap-4">
+      <div class="flex-1">
+        <h1 class="text-2xl font-semibold">Readings</h1>
+        <p class="text-muted">
+          {{
+            props.canCreate
+              ? 'Assign readings and follow how each discussion is going.'
+              : 'Your assigned readings. Open one to join its discussion.'
+          }}
+        </p>
+      </div>
+      <Button v-if="props.canCreate" label="New reading" icon="pi pi-plus" @click="openDialog" />
     </div>
 
-    <p
-      v-if="success"
-      role="status"
-      class="mb-3 rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-900 dark:border-green-800 dark:bg-green-950 dark:text-green-200"
-    >
-      {{ success }}
-    </p>
+    <Message v-if="loadError" severity="error" icon="pi pi-exclamation-circle">
+      {{ loadError }}
+    </Message>
 
-    <form
-      v-if="formOpen"
-      class="mb-4 grid gap-3 rounded-lg border border-line bg-panel p-4"
-      @submit.prevent="create"
-    >
-      <label class="grid gap-1 text-sm text-muted">
-        Title
-        <input
-          v-model="title"
-          class="field text-base"
-          maxlength="200"
-          placeholder="e.g. Mill — On Liberty, Chapter 2"
-          autofocus
-        />
-      </label>
-      <label class="grid gap-1 text-sm text-muted">
-        Description
-        <textarea
-          v-model="description"
-          class="field text-base"
-          rows="4"
-          maxlength="5000"
-          placeholder="What should students read, and what should they focus on?"
-        />
-      </label>
-      <p v-if="formError" class="text-sm text-red-600 dark:text-red-400">{{ formError }}</p>
-      <div class="flex justify-end gap-2">
-        <button type="button" class="btn" @click="formOpen = false">Cancel</button>
-        <button
-          type="submit"
-          class="btn btn-primary"
-          :disabled="busy || !title.trim() || !description.trim()"
-        >
-          Create reading
-        </button>
-      </div>
-    </form>
+    <div v-else-if="!readings" class="grid gap-3" role="status" aria-label="Loading readings">
+      <Skeleton v-for="n in 3" :key="n" height="7.5rem" border-radius="0.75rem" />
+    </div>
 
-    <p v-if="loadError" class="text-sm text-red-600 dark:text-red-400">{{ loadError }}</p>
-    <p v-else-if="!readings" class="text-sm text-muted" role="status">Loading readings…</p>
-    <p v-else-if="!readings.length" class="text-sm text-muted">
-      {{
-        canCreate
-          ? 'No readings yet. Create one to get your students started.'
-          : 'No readings have been assigned yet.'
-      }}
-    </p>
-    <template v-else>
-      <input
-        v-model="search"
-        type="search"
-        class="field mb-3"
-        placeholder="Search readings by title…"
-        aria-label="Search readings by title"
-      />
-      <p v-if="!matchingReadings.length" class="text-sm text-muted">
-        No readings match “{{ search.trim() }}”.
-        <button class="cursor-pointer text-accent hover:underline" @click="search = ''">
-          Clear search
-        </button>
+    <div
+      v-else-if="!readings.length"
+      class="rounded-xl border border-dashed border-line py-14 text-center"
+    >
+      <i class="pi pi-book text-3xl text-muted" aria-hidden="true" />
+      <p class="mt-3 font-medium">No readings yet</p>
+      <p class="text-sm text-muted">
+        {{
+          canCreate
+            ? 'Create your first reading to get students annotating.'
+            : 'Your instructor hasn’t assigned any readings yet.'
+        }}
       </p>
+      <Button
+        v-if="canCreate"
+        label="New reading"
+        icon="pi pi-plus"
+        class="mt-4"
+        @click="openDialog"
+      />
+    </div>
+
+    <template v-else>
+      <IconField class="mb-4">
+        <InputIcon class="pi pi-search" />
+        <InputText
+          v-model="search"
+          type="search"
+          fluid
+          placeholder="Search readings by title"
+          aria-label="Search readings by title"
+        />
+      </IconField>
+
+      <p v-if="!matchingReadings.length" class="py-8 text-center text-muted">
+        No readings match “{{ search.trim() }}”.
+        <Button label="Clear search" link class="p-0" @click="search = ''" />
+      </p>
+
+      <ul class="grid gap-3">
+        <li v-for="reading in matchingReadings" :key="reading.id">
+          <a
+            :href="`#/reading/${reading.id}`"
+            class="group block rounded-xl border border-line bg-panel px-5 py-4 transition hover:border-accent hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <h2 class="font-serif text-lg font-semibold group-hover:text-accent">
+              {{ reading.title }}
+            </h2>
+            <p class="mt-1 line-clamp-2 text-muted">{{ reading.description }}</p>
+            <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <span class="text-muted">
+                {{ reading.createdByName }} · {{ formatDate(reading.createdAt) }}
+              </span>
+              <span class="ml-auto flex items-center gap-1.5 font-medium">
+                <i class="pi pi-comments text-muted" aria-hidden="true" />
+                {{ plural(reading.annotationCount, 'annotation') }}
+              </span>
+              <span v-if="canCreate" class="flex items-center gap-1.5 font-medium">
+                <i class="pi pi-users text-muted" aria-hidden="true" />
+                {{ plural(reading.studentCount, 'student') }}
+              </span>
+            </div>
+          </a>
+        </li>
+      </ul>
     </template>
-    <ul v-if="matchingReadings.length" class="grid gap-2.5">
-      <li v-for="reading in matchingReadings" :key="reading.id">
-        <a
-          :href="`#/reading/${reading.id}`"
-          class="grid gap-1 rounded-lg border border-line bg-panel px-4 py-3.5 transition-colors hover:border-accent"
-        >
-          <strong class="font-semibold">{{ reading.title }}</strong>
-          <span class="line-clamp-2">{{ reading.description }}</span>
-          <span class="text-sm text-muted">
-            Assigned by {{ reading.createdByName }} · {{ formatDate(reading.createdAt) }} ·
-            <span class="font-medium text-ink">{{
-              plural(reading.annotationCount, 'annotation')
-            }}</span>
-            <template v-if="canCreate">
-              · {{ plural(reading.studentCount, 'student') }} participating
-            </template>
-          </span>
-        </a>
-      </li>
-    </ul>
+
+    <Dialog
+      v-model:visible="dialogOpen"
+      modal
+      header="New reading"
+      :style="{ width: '34rem' }"
+      :breakpoints="{ '640px': '95vw' }"
+    >
+      <form id="new-reading" class="grid gap-4" @submit.prevent="create">
+        <div class="grid gap-1.5">
+          <label for="reading-title" class="text-sm font-medium">Title</label>
+          <InputText
+            id="reading-title"
+            v-model="title"
+            maxlength="200"
+            placeholder="e.g. Mill — On Liberty, Chapter 2"
+            autofocus
+          />
+        </div>
+        <div class="grid gap-1.5">
+          <label for="reading-description" class="text-sm font-medium">Description</label>
+          <Textarea
+            id="reading-description"
+            v-model="description"
+            rows="5"
+            auto-resize
+            maxlength="5000"
+            placeholder="What should students read, and what should they focus on?"
+          />
+        </div>
+        <Message v-if="formError" severity="error" size="small">{{ formError }}</Message>
+      </form>
+      <template #footer>
+        <Button label="Cancel" severity="secondary" text @click="dialogOpen = false" />
+        <Button
+          type="submit"
+          form="new-reading"
+          label="Create reading"
+          :loading="busy"
+          :disabled="!title.trim() || !description.trim()"
+        />
+      </template>
+    </Dialog>
   </div>
 </template>

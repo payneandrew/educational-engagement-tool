@@ -21,6 +21,10 @@ function createAnnotations(readingId: string) {
   const loadError = ref('')
   /** True until the first load finishes. Reloads after a reconnect keep showing the current list. */
   const loading = ref(true)
+  /** Posts that arrived live from someone else since the page opened; the feed marks them "New". */
+  const newIds = reactive(new Set<string>())
+  /** Read out by an aria-live region, so screen reader users hear about live arrivals too. */
+  const announcement = ref('')
   let eventSource: EventSource | undefined
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let disposed = false
@@ -33,6 +37,12 @@ function createAnnotations(readingId: string) {
       for (const annotation of Object.values(byId))
         if (annotation.id === event.id || annotation.parentId === event.id)
           delete byId[annotation.id]
+  }
+  /** A live post someone else just wrote (not an edit, and not the echo of this user's own write). */
+  function noteArrival({ id, authorId, authorName, kind }: Annotation) {
+    if (loading.value || byId[id] || authorId === currentUserId.value) return
+    newIds.add(id)
+    announcement.value = `New ${kind === 'reply' ? 'reply' : 'annotation'} from ${authorName}`
   }
   function receive(event: AnnotationEvent) {
     if (pending) pending.push(event)
@@ -72,7 +82,10 @@ function createAnnotations(readingId: string) {
     eventSource.onmessage = (message: MessageEvent<string>) => {
       const event = JSON.parse(message.data) as ReadingEvent
       if (event.type === 'viewers') viewers.value = event.viewers
-      else receive(event)
+      else {
+        if (event.type === 'annotation') noteArrival(event.annotation)
+        receive(event)
+      }
     }
     eventSource.onerror = () => {
       connectionLost.value = true
@@ -180,6 +193,8 @@ function createAnnotations(readingId: string) {
     viewers,
     loading,
     loadError,
+    newIds,
+    announcement,
     busy,
     create,
     reply,

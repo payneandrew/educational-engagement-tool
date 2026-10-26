@@ -1,44 +1,29 @@
+/*
+ * Layer order: PrimeVue's component styles sit after Tailwind's base (so preflight doesn't undo them)
+ * and before Tailwind's utilities (so a utility class on a PrimeVue component still wins).
+ * PrimeVue is told the same order in main.ts.
+ */
+@layer theme, base, primevue, components, utilities;
 @import 'tailwindcss';
 
 /*
- * Design tokens. Each becomes a Tailwind color (bg-panel, text-muted, border-line, …). Utilities read
- * them as CSS variables, so dark mode only has to change the values below, not every template.
+ * Design tokens. Each becomes a Tailwind color (bg-panel, text-muted, border-line, …). They point at
+ * PrimeVue's theme variables (assets/theme.ts), so components and layout share one palette.
  */
-@theme {
-  --color-page: #fafaf8;
-  --color-panel: #fff;
-  --color-ink: #1d1d1b;
-  --color-muted: #6b6b66;
-  --color-line: #e4e2dc;
-  --color-accent: #2f5fd0;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-page: #17171a;
-    --color-panel: #202024;
-    --color-ink: #ececea;
-    --color-muted: #9a9a94;
-    --color-line: #34343a;
-    --color-accent: #7fa2ff;
-  }
+@theme inline {
+  --color-page: var(--p-surface-50);
+  --color-panel: var(--p-content-background);
+  --color-ink: var(--p-text-color);
+  --color-muted: var(--p-text-muted-color);
+  --color-line: var(--p-content-border-color);
+  --color-accent: var(--p-primary-color);
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  /* Reading material is set in a book face, as on paper; the interface stays in Inter. */
+  --font-serif: 'Literata Variable', Georgia, serif;
 }
 
 @layer base {
   body {
-    @apply bg-page text-ink;
-  }
-}
-
-/* The two primitives used all over the app. Everything else is utilities in the templates. */
-@layer components {
-  .btn {
-    @apply cursor-pointer rounded-md border border-line bg-panel px-2.5 py-1 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-default disabled:opacity-50;
-  }
-  .btn-primary {
-    @apply border-accent bg-accent text-white;
-  }
-  .field {
-    @apply w-full rounded-md border border-line bg-panel px-2 py-1.5 text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent;
+    @apply bg-page font-sans text-ink antialiased;
   }
 }

@@ -1,8 +1,8 @@
-# Marginalia — a collaborative reading app
+# Gloss — a collaborative reading app
 
 Instructors assign readings; students discuss them through annotations (comments on a whole reading), with replies, live updates, and edit/delete of their own posts.
 
-**Stack:** TypeScript · Vue 3 (`<script setup>`) + Vite · Hono on `@hono/node-server` · MongoDB (official driver) · Zod via `@hono/zod-validator` · Tailwind CSS v4 · Vitest.
+**Stack:** TypeScript · Vue 3 (`<script setup>`) + Vite · PrimeVue 4 + Tailwind CSS v4 · Hono on `@hono/node-server` · MongoDB (official driver) · Zod via `@hono/zod-validator` · Vitest.
 
 ## Run it
 
@@ -35,6 +35,15 @@ Vue ──REST (typed hc client)──▶ Hono ──▶ MongoDB
 - **Live updates.** After each successful write, the annotation service publishes an event (`annotation` or `deleted`) on an in-process `EventEmitter`, keyed by reading. Each open SSE stream subscribes to its reading and forwards those events.
 - **Counts.** `GET /api/readings` runs one aggregation over `annotations`, grouped by reading, that counts annotations (replies included) and collects distinct authors. Only students can post, so distinct authors = students participating. Nothing is stored, so counts can't drift out of date. On a reading's page the instructor's counts are computed from the live feed instead, so they update as students post.
 - **Reconnects.** Whenever the stream (re)connects, the client reloads the reading's annotations over REST, so anything missed while disconnected is picked up without the server replaying history. Events that arrive during that reload are held and applied after it, so a slow response can't undo a newer change. A banner shows while the connection is down.
+
+## Interface
+
+- **Reading page in two panes.** The reading is set like a document (serif, Literata) on the left; the discussion is a sticky panel on the right, newest first, with the composer at the top (⌘/Ctrl + Enter posts). It stacks into one column on phones.
+- **Live without noise.** Posts that arrive from other people while the page is open get a "New" tag, and an `aria-live` region announces them ("New annotation from Alice Chen") for screen reader users. Who else has the reading open shows under it.
+- **Feedback for every action.** Toasts confirm posting, replying, editing, deleting and assigning a reading; deleting asks first (a dialog that says what will be removed); form errors appear next to the form. Loading, empty and not-found states each have their own message.
+- **Instructors** see counts on every reading, live counts on the reading page, a student filter on the discussion, and a sortable participation table whose student column stays put while scrolling across readings.
+- **Components and theme.** PrimeVue supplies the interactive components (Select, Dialog, ConfirmDialog, Toast, DataTable, Button, inputs); Tailwind does the layout. There is one palette: an indigo preset on PrimeVue's Aura theme (`web/src/assets/theme.ts`), and the Tailwind tokens (`bg-panel`, `text-muted`, …) point at the same CSS variables. The app is light-only, by choice: one theme to design and check for contrast. The primary and danger colors are one shade darker than Aura's defaults so white text on them meets WCAG AA (4.5:1).
+- **Why PrimeVue 4, not 5.** PrimeVue 5 moved to a commercial license that needs a license key; 4.x is MIT.
 
 ## Data model
 
