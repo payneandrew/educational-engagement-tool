@@ -2,6 +2,7 @@
 import ConfirmDialog from 'primevue/confirmdialog'
 import Message from 'primevue/message'
 import Select from 'primevue/select'
+import Skeleton from 'primevue/skeleton'
 import Toast from 'primevue/toast'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { client, messageOf, parseResponse, type User } from '@/api/client'
@@ -138,7 +139,10 @@ const navLink = (active: boolean) =>
         :can-create="currentUser.role === 'instructor'"
       />
     </template>
-    <p v-else class="mx-auto max-w-3xl px-4 py-8 text-muted" role="status">Loading…</p>
+    <div v-else class="mx-auto grid max-w-3xl gap-3 px-4 py-8" role="status" aria-label="Loading">
+      <Skeleton width="30%" height="2rem" class="mb-3" />
+      <Skeleton v-for="n in 3" :key="n" height="7.5rem" border-radius="0.75rem" />
+    </div>
   </main>
 
   <Toast position="bottom-right" />

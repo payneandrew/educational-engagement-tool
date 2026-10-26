@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
+import Message from 'primevue/message'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import { useConfirm } from 'primevue/useconfirm'
@@ -116,7 +117,7 @@ function confirmDelete() {
           @keydown.ctrl.enter.prevent="saveEdit"
           @keydown.esc="editing = false"
         />
-        <p v-if="error" class="text-sm text-red-600" role="alert">{{ error }}</p>
+        <Message v-if="error" severity="error" size="small" variant="simple">{{ error }}</Message>
         <div class="flex justify-end gap-2">
           <Button label="Cancel" severity="secondary" text size="small" @click="editing = false" />
           <Button

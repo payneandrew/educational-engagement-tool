@@ -2,6 +2,7 @@
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Select from 'primevue/select'
+import Skeleton from 'primevue/skeleton'
 import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import { computed, nextTick, ref } from 'vue'
@@ -122,9 +123,9 @@ async function sendReply(rootId: string) {
         @keydown.meta.enter.prevent="post"
         @keydown.ctrl.enter.prevent="post"
       />
-      <p v-if="draftError" class="text-sm text-red-600" role="alert">
+      <Message v-if="draftError" severity="error" size="small" variant="simple">
         {{ draftError }}
-      </p>
+      </Message>
       <div class="flex justify-end">
         <Button
           type="submit"
@@ -160,9 +161,16 @@ async function sendReply(rootId: string) {
           </div>
         </Transition>
       </div>
-      <p v-if="loading" class="py-6 text-center text-sm text-muted" role="status">
-        Loading discussion…
-      </p>
+      <div v-if="loading" class="grid gap-5 py-4" role="status" aria-label="Loading discussion">
+        <div v-for="n in 3" :key="n" class="flex gap-3">
+          <Skeleton shape="circle" size="2rem" class="shrink-0" />
+          <div class="grid flex-1 gap-2">
+            <Skeleton width="40%" height="0.875rem" />
+            <Skeleton height="1rem" />
+            <Skeleton width="75%" height="1rem" />
+          </div>
+        </div>
+      </div>
       <div v-else-if="!roots.length" class="py-10 text-center">
         <i class="pi pi-comments text-3xl text-muted" aria-hidden="true" />
         <p class="mt-2 font-medium">No annotations yet</p>
@@ -204,9 +212,9 @@ async function sendReply(rootId: string) {
                 @keydown.ctrl.enter.prevent="sendReply(root.id)"
                 @keydown.esc="replyingTo = null"
               />
-              <p v-if="replyError" class="text-sm text-red-600" role="alert">
+              <Message v-if="replyError" severity="error" size="small" variant="simple">
                 {{ replyError }}
-              </p>
+              </Message>
               <div class="flex justify-end gap-2">
                 <Button
                   label="Cancel"
