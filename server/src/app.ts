@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
-import { auth } from './middleware/auth'
+import { authenticate } from './middleware/auth'
 import { annotationsRoutes } from './routes/annotations'
 import { participationRoutes } from './routes/participation'
 import { readingsRoutes } from './routes/readings'
@@ -23,9 +23,9 @@ export const app = new Hono()
     return c.json({ error: 'Something went wrong on the server. Please try again.' }, 500)
   })
   // Everything except the user list needs to know who is calling. Role checks are per route.
-  .use('/readings/*', auth)
-  .use('/annotations/*', auth)
-  .use('/participation/*', auth)
+  .use('/readings/*', authenticate)
+  .use('/annotations/*', authenticate)
+  .use('/participation/*', authenticate)
   .route('/users', usersRoutes)
   .route('/readings', readingsRoutes)
   .route('/annotations', annotationsRoutes)

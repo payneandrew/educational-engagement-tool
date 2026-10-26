@@ -59,7 +59,7 @@ export async function getReading(id: string): Promise<ReadingDTO> {
   return toReadingDTO(reading)
 }
 
-/** Callers must already have checked the user is an instructor (the route's `instructorOnly`). */
+/** Callers must already have checked the user is an instructor (the route's `requireInstructor`). */
 export async function createReading(
   instructor: UserDoc,
   input: CreateReadingInput,

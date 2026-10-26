@@ -23,7 +23,7 @@ export const toAnnotationDTO = ({
 })
 
 /** Every write tells the reading's live viewers what changed, after it has been saved. */
-function saved(annotation: AnnotationDoc): AnnotationDTO {
+function publishSaved(annotation: AnnotationDoc): AnnotationDTO {
   const dto = toAnnotationDTO(annotation)
   publish(annotation.readingId, { type: 'annotation', annotation: dto })
   return dto
@@ -50,7 +50,7 @@ const newAnnotation = (
 async function insert(annotation: AnnotationDoc): Promise<AnnotationDTO> {
   try {
     await annotations.insertOne(annotation)
-    return saved(annotation)
+    return publishSaved(annotation)
   } catch (error) {
     if (!(error instanceof MongoServerError && error.code === 11000)) throw error // not a duplicate id
     const original = await annotations.findOne({ _id: annotation._id })
@@ -117,7 +117,7 @@ export async function updateAnnotation(
     { returnDocument: 'after' },
   )
   if (!updated) throw new HTTPException(404, { message: 'annotation not found' }) // deleted between the check and the update
-  return saved(updated)
+  return publishSaved(updated)
 }
 
 /**
