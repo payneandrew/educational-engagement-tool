@@ -77,6 +77,7 @@ function confirmDelete() {
   <article
     class="flex gap-3 rounded-lg py-2"
     :class="highlight && '-mx-2 bg-accent/10 px-2'"
+    :data-new="newIds.has(post.id) ? post.id : undefined"
     :aria-label="`${post.kind === 'reply' ? 'Reply' : 'Annotation'} by ${post.authorName}`"
   >
     <UserAvatar :id="post.authorId" :name="post.authorName" />
@@ -97,7 +98,10 @@ function confirmDelete() {
         >
           · edited
         </span>
-        <Tag v-if="newIds.has(post.id)" value="New" severity="info" class="px-1.5 py-0 text-xs" />
+        <!-- Fades away once the post has been read (see useUnreadPosts). -->
+        <Transition leave-active-class="transition-opacity duration-700" leave-to-class="opacity-0">
+          <Tag v-if="newIds.has(post.id)" value="New" severity="info" class="px-1.5 py-0 text-xs" />
+        </Transition>
       </div>
 
       <form v-if="editing" class="mt-1.5 grid gap-2" @submit.prevent="saveEdit">

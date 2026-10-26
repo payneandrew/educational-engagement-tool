@@ -6,6 +6,7 @@ import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import { computed, nextTick, ref } from 'vue'
 import { useAnnotations } from '@/composables/useAnnotations'
+import { useUnreadPosts } from '@/composables/useUnreadPosts'
 import { plural } from '@/utils/format'
 import AnnotationPost from './AnnotationPost.vue'
 
@@ -22,6 +23,7 @@ const {
   reply,
   connectionLost,
   announcement,
+  newIds,
 } = useAnnotations()
 const toast = useToast()
 
@@ -43,6 +45,11 @@ const visibleRoots = computed(() => {
     (root) => root.authorId === id || repliesOf(root.id).some((reply) => reply.authorId === id),
   )
 })
+
+// The "N new annotations" pills, and "New" tags fading once a post has been read (see the composable).
+// Only the panel scrolls on desktop; on phones the page does.
+const scroller = ref<HTMLElement>()
+const { hidden: hiddenNew, jumpToNew } = useUnreadPosts(scroller, newIds, () => visibleRoots.value)
 
 const draft = ref('')
 const draftError = ref('')
@@ -118,8 +125,7 @@ async function sendReply(rootId: string) {
       <p v-if="draftError" class="text-sm text-red-600" role="alert">
         {{ draftError }}
       </p>
-      <div class="flex items-center justify-between gap-2">
-        <span class="text-xs text-muted">⌘/Ctrl + Enter to post</span>
+      <div class="flex justify-end">
         <Button
           type="submit"
           label="Post"
@@ -131,7 +137,29 @@ async function sendReply(rootId: string) {
       </div>
     </form>
 
-    <div class="min-h-0 flex-1 overflow-y-auto px-4">
+    <!-- On phones the page scrolls rather than the panel, and the pills stick to the screen. -->
+    <div ref="scroller" class="min-h-0 flex-1 px-4 lg:overflow-y-auto">
+      <div class="sticky top-20 z-10 h-0 lg:top-3">
+        <Transition
+          enter-active-class="transition duration-200"
+          enter-from-class="opacity-0"
+          leave-active-class="transition duration-150"
+          leave-to-class="opacity-0"
+        >
+          <div v-if="hiddenNew.above" class="flex justify-center">
+            <Button
+              :label="plural(hiddenNew.above, 'new annotation')"
+              :aria-label="`${plural(hiddenNew.above, 'new annotation')} above. Jump to them`"
+              icon="pi pi-arrow-up"
+              icon-pos="right"
+              size="small"
+              rounded
+              class="shadow-md"
+              @click="jumpToNew('above')"
+            />
+          </div>
+        </Transition>
+      </div>
       <p v-if="loading" class="py-6 text-center text-sm text-muted" role="status">
         Loading discussion…
       </p>
@@ -208,6 +236,27 @@ async function sendReply(rootId: string) {
           </template>
         </li>
       </ol>
+      <div class="sticky bottom-4 z-10 h-0">
+        <Transition
+          enter-active-class="transition duration-200"
+          enter-from-class="opacity-0"
+          leave-active-class="transition duration-150"
+          leave-to-class="opacity-0"
+        >
+          <div v-if="hiddenNew.below" class="flex -translate-y-full justify-center">
+            <Button
+              :label="plural(hiddenNew.below, 'new annotation')"
+              :aria-label="`${plural(hiddenNew.below, 'new annotation')} below. Jump to them`"
+              icon="pi pi-arrow-down"
+              icon-pos="right"
+              size="small"
+              rounded
+              class="shadow-md"
+              @click="jumpToNew('below')"
+            />
+          </div>
+        </Transition>
+      </div>
     </div>
   </section>
 </template>
