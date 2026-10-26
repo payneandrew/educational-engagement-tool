@@ -6,7 +6,7 @@ import { annotations, readings, users } from '../db'
  * Students come from `users`, not from the annotations, so a student who hasn't posted anywhere still
  * gets a row (of zeros). Those are the students an instructor most needs to see.
  */
-export async function participation() {
+export async function getParticipation() {
   const [students, readingList, counts] = await Promise.all([
     users.find({ role: 'student' }).sort({ name: 1 }).toArray(),
     // Oldest first, like a gradebook: columns read in the order the readings were assigned.

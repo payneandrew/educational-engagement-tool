@@ -1,13 +1,13 @@
 import { DetailedError } from 'hono/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createSchema } from '../../../server/src/schemas'
+import { createAnnotationSchema } from '../../../server/src/schemas'
 import { newId, withRetry } from './retry'
 
 describe('newId', () => {
   it("makes ids the server accepts (its own validation rule, so the two can't drift apart)", () => {
     const id = newId()
     expect(id).toMatch(/^[0-9a-f]{24}$/)
-    expect(createSchema.safeParse({ body: 'hello', id }).success).toBe(true)
+    expect(createAnnotationSchema.safeParse({ body: 'hello', id }).success).toBe(true)
   })
 
   it("doesn't repeat", () => {

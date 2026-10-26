@@ -11,7 +11,12 @@ export type AnnotationDTO = Omit<AnnotationDoc, '_id' | 'createdAt' | 'editedAt'
   editedAt: string | null
 }
 
-export const toDTO = ({ _id, createdAt, editedAt, ...rest }: AnnotationDoc): AnnotationDTO => ({
+export const toAnnotationDTO = ({
+  _id,
+  createdAt,
+  editedAt,
+  ...rest
+}: AnnotationDoc): AnnotationDTO => ({
   id: _id,
   createdAt: createdAt.toISOString(),
   editedAt: editedAt?.toISOString() ?? null,
@@ -20,7 +25,7 @@ export const toDTO = ({ _id, createdAt, editedAt, ...rest }: AnnotationDoc): Ann
 
 /** Every write tells the reading's live viewers what changed, after it has been saved. */
 function saved(annotation: AnnotationDoc) {
-  const dto = toDTO(annotation)
+  const dto = toAnnotationDTO(annotation)
   publish(annotation.readingId, { type: 'annotation', annotation: dto })
   return dto
 }
@@ -56,7 +61,7 @@ async function insert(annotation: AnnotationDoc) {
       original.readingId === annotation.readingId &&
       original.body === annotation.body
     if (!isRetry) throw new HTTPException(409, { message: 'id already in use' })
-    return toDTO(original) // already published the first time
+    return toAnnotationDTO(original) // already published the first time
   }
 }
 
@@ -89,10 +94,10 @@ async function loadOwn(user: UserDoc, id: string) {
   return annotation
 }
 
-export async function editAnnotation(user: UserDoc, id: string, body: string) {
+export async function updateAnnotation(user: UserDoc, id: string, body: string) {
   const current = await loadOwn(user, id)
   // Saving the same words changes nothing: not marked edited, and nobody is notified.
-  if (current.body === body) return toDTO(current)
+  if (current.body === body) return toAnnotationDTO(current)
   const updated = await annotations.findOneAndUpdate(
     { _id: id },
     { $set: { body, editedAt: new Date() } },
@@ -116,4 +121,4 @@ export async function deleteAnnotation(user: UserDoc, id: string) {
 
 /** A reading's whole discussion, newest first. The client groups replies under their roots. */
 export const listAnnotations = async (readingId: string) =>
-  (await annotations.find({ readingId }).sort({ createdAt: -1 }).toArray()).map(toDTO)
+  (await annotations.find({ readingId }).sort({ createdAt: -1 }).toArray()).map(toAnnotationDTO)

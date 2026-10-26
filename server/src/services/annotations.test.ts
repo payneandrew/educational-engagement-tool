@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { annotations } from '../db'
 import * as events from '../realtime/events'
 import type { ReadingEvent } from '../realtime/events'
-import { bodySchema } from '../schemas'
+import { updateAnnotationSchema } from '../schemas'
 import { useTestDatabase } from '../test/database'
 import * as service from './annotations'
 
@@ -38,7 +38,7 @@ describe('live events', () => {
   it('treats saving the same words as no edit: not marked edited, nothing published', async () => {
     const root = await service.createRoot(alice, READING, 'unchanged')
     const { got, stop } = listen(READING)
-    expect((await service.editAnnotation(alice, root.id, 'unchanged')).editedAt).toBeNull()
+    expect((await service.updateAnnotation(alice, root.id, 'unchanged')).editedAt).toBeNull()
     expect(got).toEqual([])
     stop()
   })
@@ -46,7 +46,7 @@ describe('live events', () => {
   it('publishes edits, marked as edited', async () => {
     const root = await service.createRoot(alice, READING, 'original wording')
     const { got, stop } = listen(READING)
-    await service.editAnnotation(alice, root.id, 'revised wording')
+    await service.updateAnnotation(alice, root.id, 'revised wording')
     expect(got).toHaveLength(1)
     expect(got[0]).toMatchObject({
       type: 'annotation',
@@ -91,7 +91,7 @@ describe('rules', () => {
   it('only the author may edit or delete, and a rejected write publishes nothing', async () => {
     const root = await service.createRoot(alice, READING, 'mine')
     const { got, stop } = listen(READING)
-    await expect(service.editAnnotation(bob, root.id, 'hijack')).rejects.toMatchObject({
+    await expect(service.updateAnnotation(bob, root.id, 'hijack')).rejects.toMatchObject({
       status: 403,
     })
     await expect(service.deleteAnnotation(bob, root.id)).rejects.toMatchObject({
@@ -131,8 +131,8 @@ describe('rules', () => {
   })
 
   it('rejects empty or whitespace-only annotations and trims the rest', async () => {
-    expect(bodySchema.safeParse({ body: '   ' }).success).toBe(false)
-    expect(bodySchema.safeParse({ body: '  ok ' }).data).toEqual({ body: 'ok' })
+    expect(updateAnnotationSchema.safeParse({ body: '   ' }).success).toBe(false)
+    expect(updateAnnotationSchema.safeParse({ body: '  ok ' }).data).toEqual({ body: 'ok' })
   })
 })
 
