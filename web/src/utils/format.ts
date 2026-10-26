@@ -2,6 +2,9 @@
 export const plural = (count: number, word: string): string =>
   `${count} ${word}${count === 1 ? '' : 's'}`
 
+/** 2.0833 → "2.1": the one-decimal form used for averages. */
+export const oneDecimal = (value: number): string => value.toFixed(1)
+
 const relative = new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' })
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE

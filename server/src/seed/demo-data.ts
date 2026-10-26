@@ -2,7 +2,8 @@
  * Extra sample data for trying the app by hand (`npm run seed`). Loaded on top of the base seed in
  * seed/index.ts, which the automated tests use on its own. Chosen to exercise every feature and edge case:
  * a second instructor, a student who never posts, accented names and titles (search), a busy reading
- * with a long thread, a reading with no annotations, long and multi-paragraph posts, and edits.
+ * with a long thread, a reading with no annotations, long and multi-paragraph posts, edits, and enough
+ * spread in who posts how much to use every step of the Participation heat map (counts from 0 to 6).
  */
 import type { ReadingDoc, UserDoc } from '../db/models'
 
@@ -116,6 +117,60 @@ export const DEMO_THREADS: Record<string, SeedThread[]> = {
         { by: 'u-farah', at: 75, body: 'Exactly, that’s his “majority of one” line.' },
       ],
     },
+    {
+      by: 'u-diego',
+      at: 80,
+      body: 'He says the remedy for an unjust law is not to wait for a majority to change it. But a majority is exactly what a democracy is for. What is he asking us to put in its place?',
+      replies: [
+        {
+          by: 'u-alice',
+          at: 83,
+          body: 'Nothing, I think. He calls voting “a sort of gaming” and says the right does not need a majority to be the right. The point is that your conscience is not up for election.',
+        },
+        {
+          by: 'u-diego',
+          at: 86,
+          body: 'Then why does he pay the highway tax and refuse the poll tax? Where does the line fall?',
+        },
+        {
+          by: 'u-bob',
+          at: 89,
+          body: 'Complicity. The poll tax goes straight to a government that protects slavery, and he does not want to be implicated in that. A road is just a road.',
+        },
+        {
+          by: 'u-diego',
+          at: 92,
+          body: 'That feels convenient. Almost every tax funds something somebody objects to.',
+        },
+        {
+          by: 'u-alice',
+          at: 95,
+          body: 'Which may be his point: you cannot be perfectly clean, but you can refuse to lend your name to the worst of it.',
+        },
+      ],
+    },
+    {
+      by: 'u-diego',
+      at: 100,
+      body: 'The night in jail is the only concrete event in the essay. Is the drama in the act itself, or in the writing about it afterward?',
+      replies: [
+        {
+          by: 'u-farah',
+          at: 103,
+          body: 'The writing, mostly. The essay is the afterlife of the act. Without it, a night in jail is a footnote.',
+        },
+        {
+          by: 'u-hannah',
+          at: 106,
+          body: 'Worth remembering that the exchange with Emerson (“Henry, what are you doing in there?”) is probably a legend. The legend matters as much as the night.',
+        },
+      ],
+    },
+    {
+      by: 'u-emma',
+      at: 110,
+      body: 'He opens with “that government is best which governs least” and within a paragraph upgrades it to “governs not at all.” Is the second version serious, or is it rhetoric?',
+    },
   ],
   'on-liberty-ch2': [
     {
@@ -159,6 +214,38 @@ export const DEMO_THREADS: Record<string, SeedThread[]> = {
         },
       ],
     },
+    {
+      by: 'u-bob',
+      at: 60,
+      body: 'If an opinion is demonstrably false, is silencing it really a harm? Mill’s second case is that even a false view forces the true one to be defended, but that seems to assume someone is still listening.',
+      replies: [
+        {
+          by: 'u-ibrahim',
+          at: 63,
+          body: 'I read the second case as being about the believer, not the speaker. Without a challenge, the true opinion decays into dogma that nobody can actually defend.',
+        },
+        {
+          by: 'u-bob',
+          at: 66,
+          body: 'In a seminar, sure. In a public square full of misinformation, I am less convinced the cure is more speech.',
+        },
+        {
+          by: 'u-alice',
+          at: 69,
+          body: 'He would say more speech is the only cure that does not hand someone the power to decide what is false. But the essay predates algorithmic amplification by a long way.',
+        },
+        {
+          by: 'u-bob',
+          at: 72,
+          body: '“Collision of adverse opinions” only works if both sides are actually heard. That is the part I doubt now.',
+        },
+      ],
+    },
+    {
+      by: 'u-carol',
+      at: 75,
+      body: 'The examples of Socrates and Jesus are chosen to make the reader uneasy about their own certainty. It worked on me.',
+    },
   ],
   'natural-selection': [
     {
@@ -178,6 +265,23 @@ export const DEMO_THREADS: Record<string, SeedThread[]> = {
       at: 25,
       editedAt: 27,
       body: '“Natural selection is daily and hourly scrutinising… every variation, even the slightest.” The metaphor makes nature sound like an agent, the very misreading he worries about elsewhere.',
+    },
+    {
+      by: 'u-carol',
+      at: 29,
+      body: 'He keeps apologizing for “struggle for existence” (“in a large and metaphorical sense”). It reads like he already knew people would take it literally.',
+      replies: [
+        {
+          by: 'u-gabriel',
+          at: 33,
+          body: 'They did, for about a century. Social Darwinism is mostly that one phrase taken at face value.',
+        },
+        {
+          by: 'u-carol',
+          at: 36,
+          body: 'What I find stronger is the breeder comparison: selection with no breeder is the whole idea, and he makes it feel obvious.',
+        },
+      ],
     },
   ],
   'wollstonecraft-ch2': [
@@ -213,6 +317,18 @@ export const DEMO_THREADS: Record<string, SeedThread[]> = {
       at: 48,
       body: 'Short version: virtue requires reason, reason requires education, so denying women education denies them virtue.',
     },
+    {
+      by: 'u-emma',
+      at: 52,
+      body: 'She treats the cult of “sensibility” as a trap: women are taught to value charm over strength of mind, then blamed for having no strength of mind.',
+      replies: [
+        {
+          by: 'u-hannah',
+          at: 55,
+          body: 'And she says outright that Rousseau is the one who set the trap. That passage is the clearest answer to him in the book.',
+        },
+      ],
+    },
   ],
   'durkheim-rules-ch1': [
     {
@@ -241,6 +357,18 @@ export const DEMO_THREADS: Record<string, SeedThread[]> = {
           by: 'u-bob',
           at: 29,
           body: 'Good point. That stability is hard to explain one person at a time.',
+        },
+      ],
+    },
+    {
+      by: 'u-gabriel',
+      at: 33,
+      body: 'The test for a social fact is that it is external and coercive. But isn’t that circular? How do we know a norm is coercive unless somebody breaks it?',
+      replies: [
+        {
+          by: 'u-bob',
+          at: 37,
+          body: 'He answers this later with suicide rates: the numbers stay stable year to year even as the individuals change. That is his evidence that the pressure is real.',
         },
       ],
     },
@@ -311,6 +439,55 @@ export const DEMO_THREADS: Record<string, SeedThread[]> = {
       at: 60,
       body: 'Emancipation as a promise the nation has not kept still lands, more than a century later.',
     },
+    {
+      by: 'u-alice',
+      at: 65,
+      body: 'Is the veil something imposed on him, or something he lives behind? The first pages seem to say both.',
+      replies: [
+        {
+          by: 'u-ibrahim',
+          at: 68,
+          body: 'Imposed first, inhabited after. He says he was “born with a veil,” which makes it something done to him before he has a say.',
+        },
+        {
+          by: 'u-alice',
+          at: 71,
+          body: 'And “second-sight” is framed as a gift and a curse in a single sentence. I do not think he wants to resolve that.',
+        },
+        {
+          by: 'u-emma',
+          at: 74,
+          body: 'The gift is complicated: he says it gives him no true self-consciousness, only a way of seeing himself through the eyes of others.',
+        },
+        {
+          by: 'u-alice',
+          at: 77,
+          body: 'That is the double-consciousness sentence, and it is the hinge of the whole chapter.',
+        },
+        {
+          by: 'u-hannah',
+          at: 80,
+          body: 'Worth reading next to Mill’s chapter. Du Bois’s “two-ness” is the experience of not being free to hold your own opinion of yourself.',
+        },
+      ],
+    },
+    {
+      by: 'u-gabriel',
+      at: 84,
+      body: 'Why does he quote the sorrow-song music before the argument begins? Every chapter opens with a few bars and no explanation.',
+      replies: [
+        {
+          by: 'u-ibrahim',
+          at: 87,
+          body: 'Because the argument is meant to be heard as well as read, I think. The music comes first so you feel it before you analyze it.',
+        },
+        {
+          by: 'u-alice',
+          at: 90,
+          body: 'The bars come untranslated, too. He trusts the reader to feel before understanding.',
+        },
+      ],
+    },
   ],
   'tocqueville-democratie': [
     {
@@ -329,6 +506,11 @@ export const DEMO_THREADS: Record<string, SeedThread[]> = {
       by: 'u-carol',
       at: 20,
       body: 'Interesting that it took a foreign observer to see voluntary associations as so central to American life.',
+    },
+    {
+      by: 'u-farah',
+      at: 24,
+      body: 'His claim that associations are what keep democracy from sliding into isolated individualism feels more relevant now than it probably did in 1840.',
     },
   ],
 }
