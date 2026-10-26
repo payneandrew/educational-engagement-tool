@@ -66,40 +66,9 @@ Vue ──REST (typed hc client)──▶ Hono ──▶ MongoDB
 - **Runs on localhost only**, as the exercise allows. Deployed behind a load balancer or reverse proxy, the live stream would need a heartbeat (those close connections idle for about a minute) and a client-side check that reconnects when the heartbeat stops (some proxies keep a dead connection looking open). In development, Vite's proxy is set to close the browser's stream when the API restarts, so the page notices and reconnects.
 - **No real auth**, as the exercise allows: anyone can claim any user id.
 
-## Project layout
-
-Server routes follow Hono's guide for larger apps (one router per resource, mounted with `.route()`); the web app follows the `create-vue` layout, with `@/` meaning `web/src/`.
-
-```
-server/src/
-  index.ts          entry point: connect, seed an empty database, start the server
-  app.ts            mounts the routers and auth, exports AppType for the client
-  routes/           users, readings (incl. a reading's annotations and stream), annotations, participation
-  middleware/       auth (user lookup, role checks), validate (Zod with a uniform error body)
-  services/         readings, annotations, participation: the logic and database access
-  realtime/         events (in-process pub/sub and presence), stream (the SSE endpoint)
-  db/               connection, collections and indexes; models (document types)
-  seed/             base seed and demo data
-  schemas.ts        request body schemas
-  test/             test setup: one MongoDB per run, a database per test file
-web/src/
-  api/              typed hc client, error messages, safe retries for new posts, current user
-  views/            pages: reading list, reading, participation
-  components/       discussion feed and a single post
-  composables/      useAnnotations: a reading's live discussion and its actions
-  utils/            formatting and search helpers
-  assets/main.css   Tailwind entry and theme
-scripts/            dev-db.ts (local MongoDB), seed.ts (npm run seed)
-```
-
-Tests sit next to the code they cover (`*.test.ts`).
-
 ## Tests
 
-`npm test` runs Vitest. The server tests share one throwaway MongoDB, started once per run, and each test file gets its own database on it, so files can run in parallel without interfering (`server/src/test/`; a test file just calls `useTestDatabase()`):
+`npm test` runs Vitest. Tests sit next to the code they cover (`*.test.ts`).
 
-- `server/src/app.test.ts` calls the real app over HTTP (auth, role middleware, validation): `GET /api/readings` returns the right annotation and student counts per reading (replies included, zero for an untouched reading); `POST /api/readings` lets instructors create (input trimmed, new reading listed first) and gives students 403, unknown users 401, and a blank title or description 400; annotation routes let students post and anyone read, give instructors 403 on every write, reject empty or over-5,000-character annotations and edits (400) and unknown readings (404); and an unexpected failure returns a generic 500 without exposing internal details; and the live stream opens immediately and pushes new annotations to a connected client.
-- `server/src/services/annotations.test.ts` covers the annotation service: events reach only that reading's subscribers, edits are published and marked edited, deleting a root deletes its replies (and publishes one `deleted` event with just the root's id), only authors can edit or delete, a retried post with a client-chosen id returns the original rather than a duplicate, even when two copies arrive at once (and any other reuse of an id, by another user, with other words, or in another reading or thread, is refused), replies are one level deep, listing is newest first, and empty annotations are rejected.
-- `web/src/api/errors.test.ts` covers how the frontend turns failures into messages: the API's own `{ error }` text, a readable message for empty or non-JSON error bodies (like the empty 502 Vite's proxy sends while the API restarts), and a network failure; an unexpected error's raw text is never shown. API responses are read with Hono's `parseResponse`, which returns the typed body or throws.
-- `web/src/utils/search.test.ts` covers the reading search: matching any part of a title regardless of case and accents, and an empty search matching everything.
-- `web/src/api/retry.test.ts` covers the client half of safe retries: a request that got no answer is retried after 1s and then 2s, at most three tries, while an answer from the server (even an error) is never retried; new ids are 24 hex characters that pass the server's own validation, and don't repeat.
+- **Server:** the API over HTTP (roles, validation, error responses, counts, the live stream) and the annotation service (live events, edit and delete rules, safe retries with client-chosen ids). They run against a real, throwaway MongoDB: one per test run, with a separate database for each test file (`server/src/test/`).
+- **Web:** the logic that doesn't need a browser: error messages, reading search, date formatting, and retrying requests.
