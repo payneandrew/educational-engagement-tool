@@ -5,6 +5,8 @@ export const createReadingSchema = z.object({
   description: z.string().trim().min(1, 'description is required').max(5000),
 })
 
+export type CreateReadingInput = z.infer<typeof createReadingSchema>
+
 /** Trimmed first, so whitespace-only annotations are rejected as empty. */
 export const updateAnnotationSchema = z.object({
   body: z.string().trim().min(1, 'annotation cannot be empty').max(5000),

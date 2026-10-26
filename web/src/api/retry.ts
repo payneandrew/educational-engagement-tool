@@ -9,7 +9,7 @@
  * server's ids (24 hex characters), from the browser's cryptographic random source: 96 random bits,
  * so ids don't collide in practice and can't be guessed.
  */
-export const newId = () =>
+export const newId = (): string =>
   Array.from(crypto.getRandomValues(new Uint8Array(12)), (byte) =>
     byte.toString(16).padStart(2, '0'),
   ).join('')

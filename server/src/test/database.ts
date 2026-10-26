@@ -3,7 +3,7 @@ import { db, initDb, mongo } from '../db'
 import { seed } from '../seed'
 
 /** For a test file that uses the database: connects and loads the base seed first, deletes it all after. */
-export function useTestDatabase() {
+export function useTestDatabase(): void {
   beforeAll(async () => {
     await initDb()
     await seed()

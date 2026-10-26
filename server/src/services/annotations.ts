@@ -11,6 +11,9 @@ export type AnnotationDTO = Omit<AnnotationDoc, '_id' | 'createdAt' | 'editedAt'
   editedAt: string | null
 }
 
+/** What deleting an annotation answers with: the id that is gone (its replies went with it). */
+export type DeletedAnnotationDTO = { id: string }
+
 export const toAnnotationDTO = ({
   _id,
   createdAt,
@@ -24,7 +27,7 @@ export const toAnnotationDTO = ({
 })
 
 /** Every write tells the reading's live viewers what changed, after it has been saved. */
-function saved(annotation: AnnotationDoc) {
+function saved(annotation: AnnotationDoc): AnnotationDTO {
   const dto = toAnnotationDTO(annotation)
   publish(annotation.readingId, { type: 'annotation', annotation: dto })
   return dto
@@ -48,7 +51,7 @@ const newAnnotation = (
  * its response never arrived, the retry (same id) gets the original back instead of a duplicate. Any
  * other clash on the id is refused, without revealing the post that holds it.
  */
-async function insert(annotation: AnnotationDoc) {
+async function insert(annotation: AnnotationDoc): Promise<AnnotationDTO> {
   try {
     await annotations.insertOne(annotation)
     return saved(annotation)
@@ -65,13 +68,23 @@ async function insert(annotation: AnnotationDoc) {
   }
 }
 
-export async function createRoot(user: UserDoc, readingId: string, body: string, id?: string) {
+export async function createRoot(
+  user: UserDoc,
+  readingId: string,
+  body: string,
+  id?: string,
+): Promise<AnnotationDTO> {
   if (!(await readings.countDocuments({ _id: readingId }, { limit: 1 })))
     throw new HTTPException(404, { message: 'reading not found' })
   return insert(newAnnotation(user, { readingId, kind: 'root', parentId: null, body }, id))
 }
 
-export async function createReply(user: UserDoc, parentId: string, body: string, id?: string) {
+export async function createReply(
+  user: UserDoc,
+  parentId: string,
+  body: string,
+  id?: string,
+): Promise<AnnotationDTO> {
   const parent = await annotations.findOne({ _id: parentId })
   if (!parent) throw new HTTPException(404, { message: 'annotation not found' })
   if (parent.kind !== 'root')
@@ -86,7 +99,7 @@ export async function createReply(user: UserDoc, parentId: string, body: string,
 }
 
 /** Only the author may change a post. */
-async function loadOwn(user: UserDoc, id: string) {
+async function loadOwn(user: UserDoc, id: string): Promise<AnnotationDoc> {
   const annotation = await annotations.findOne({ _id: id })
   if (!annotation) throw new HTTPException(404, { message: 'annotation not found' })
   if (annotation.authorId !== user._id)
@@ -94,7 +107,11 @@ async function loadOwn(user: UserDoc, id: string) {
   return annotation
 }
 
-export async function updateAnnotation(user: UserDoc, id: string, body: string) {
+export async function updateAnnotation(
+  user: UserDoc,
+  id: string,
+  body: string,
+): Promise<AnnotationDTO> {
   const current = await loadOwn(user, id)
   // Saving the same words changes nothing: not marked edited, and nobody is notified.
   if (current.body === body) return toAnnotationDTO(current)
@@ -112,7 +129,7 @@ export async function updateAnnotation(user: UserDoc, id: string, body: string) 
  * no context. One deleteMany does both (a reply has no replies, so for one this deletes just itself).
  * The event carries only this id; clients drop its replies themselves, since they know each parentId.
  */
-export async function deleteAnnotation(user: UserDoc, id: string) {
+export async function deleteAnnotation(user: UserDoc, id: string): Promise<DeletedAnnotationDTO> {
   const annotation = await loadOwn(user, id)
   await annotations.deleteMany({ $or: [{ _id: id }, { parentId: id }] })
   publish(annotation.readingId, { type: 'deleted', id })
@@ -120,5 +137,5 @@ export async function deleteAnnotation(user: UserDoc, id: string) {
 }
 
 /** A reading's whole discussion, newest first. The client groups replies under their roots. */
-export const listAnnotations = async (readingId: string) =>
+export const listAnnotations = async (readingId: string): Promise<AnnotationDTO[]> =>
   (await annotations.find({ readingId }).sort({ createdAt: -1 }).toArray()).map(toAnnotationDTO)

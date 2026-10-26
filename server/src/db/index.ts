@@ -9,12 +9,12 @@ export const users = db.collection<UserDoc>('users')
 export const readings = db.collection<ReadingDoc>('readings')
 export const annotations = db.collection<AnnotationDoc>('annotations')
 
-export async function initDb() {
+export async function initDb(): Promise<void> {
   await mongo.connect()
   await createIndexes()
 }
 
-export async function createIndexes() {
+export async function createIndexes(): Promise<void> {
   // Serves loading a reading's discussion (newest first) and the reading list's newest-first sort.
   await annotations.createIndex({ readingId: 1, createdAt: -1 })
   // Serves deleting a root together with its replies.

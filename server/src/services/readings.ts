@@ -2,6 +2,7 @@ import { HTTPException } from 'hono/http-exception'
 import { ObjectId } from 'mongodb'
 import { annotations, readings } from '../db'
 import type { ReadingDoc, UserDoc } from '../db/models'
+import type { CreateReadingInput } from '../schemas'
 
 /** Wire shape for REST. Inferred types flow from here to the Vue app via Hono RPC. */
 export type ReadingDTO = Omit<ReadingDoc, '_id' | 'createdAt'> & { id: string; createdAt: string }
@@ -18,10 +19,13 @@ export interface ReadingStats {
   /** Distinct authors. Only students can post, so this is the number of students participating. */
   studentCount: number
 }
+/** A reading as listed: its details plus its activity counts. */
+export type ReadingListItemDTO = ReadingDTO & ReadingStats
+
 const NO_ACTIVITY: ReadingStats = { annotationCount: 0, studentCount: 0 }
 
 /** One pass over the annotations, grouped by reading. Readings nobody has annotated don't appear. */
-async function statsByReading() {
+async function statsByReading(): Promise<Map<string, ReadingStats>> {
   const rows = await annotations
     .aggregate<ReadingStats & { _id: string }>([
       {
@@ -38,7 +42,7 @@ async function statsByReading() {
 }
 
 /** Newest first, so a reading an instructor just assigned is at the top. Each carries its activity counts. */
-export async function listReadings() {
+export async function listReadings(): Promise<ReadingListItemDTO[]> {
   const [list, stats] = await Promise.all([
     readings.find().sort({ createdAt: -1 }).toArray(),
     statsByReading(),
@@ -49,7 +53,7 @@ export async function listReadings() {
   }))
 }
 
-export async function getReading(id: string) {
+export async function getReading(id: string): Promise<ReadingDTO> {
   const reading = await readings.findOne({ _id: id })
   if (!reading) throw new HTTPException(404, { message: 'reading not found' })
   return toReadingDTO(reading)
@@ -58,8 +62,8 @@ export async function getReading(id: string) {
 /** Callers must already have checked the user is an instructor (the route's `instructorOnly`). */
 export async function createReading(
   instructor: UserDoc,
-  input: { title: string; description: string },
-) {
+  input: CreateReadingInput,
+): Promise<ReadingListItemDTO> {
   const reading: ReadingDoc = {
     _id: new ObjectId().toHexString(),
     title: input.title,

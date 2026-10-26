@@ -7,7 +7,7 @@ import { joinReading, subscribe } from './events'
  * Live updates for one reading. The client reloads the full list whenever this (re)connects, so the
  * stream only carries what happens while it's open.
  */
-export const streamReading = (c: Context<AppEnv, '/:id/stream'>) =>
+export const streamReading = (c: Context<AppEnv, '/:id/stream'>): Response =>
   streamSSE(c, async (stream) => {
     const readingId = c.req.param('id')
     // Write something right away: proxies (including Vite's dev proxy) hold the response headers

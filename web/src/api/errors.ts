@@ -5,7 +5,7 @@ import { DetailedError } from 'hono/client'
  * client) throws a DetailedError for a non-2xx response; our server puts a readable message in its
  * `{ error }` body, which ends up in `detail.data`.
  */
-export function messageOf(error: unknown) {
+export function messageOf(error: unknown): string {
   if (error instanceof DetailedError) {
     const body: unknown = error.detail?.data
     if (body && typeof body === 'object' && 'error' in body && typeof body.error === 'string')

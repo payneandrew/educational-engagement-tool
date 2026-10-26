@@ -5,9 +5,11 @@ import type { AnnotationDTO } from '../services/annotations'
 export type AnnotationEvent =
   { type: 'annotation'; annotation: AnnotationDTO } | { type: 'deleted'; id: string }
 
+/** Someone who has a reading open right now. */
+export type Viewer = { id: string; name: string }
+
 /** Everything sent on a reading's live stream: annotation changes, and who currently has it open. */
-export type ReadingEvent =
-  AnnotationEvent | { type: 'viewers'; viewers: { id: string; name: string }[] }
+export type ReadingEvent = AnnotationEvent | { type: 'viewers'; viewers: Viewer[] }
 
 /**
  * In-process pub/sub, one channel per reading (the event name is the readingId). The annotation
@@ -19,10 +21,11 @@ export type ReadingEvent =
 const bus = new EventEmitter()
 bus.setMaxListeners(0) // one listener per open stream; the default cap of 10 would just print warnings
 
-export const publish = (readingId: string, event: ReadingEvent) => void bus.emit(readingId, event)
+export const publish = (readingId: string, event: ReadingEvent): void =>
+  void bus.emit(readingId, event)
 
 /** Returns the unsubscribe function. */
-export function subscribe(readingId: string, listener: (event: ReadingEvent) => void) {
+export function subscribe(readingId: string, listener: (event: ReadingEvent) => void): () => void {
   bus.on(readingId, listener)
   return () => void bus.off(readingId, listener)
 }
@@ -30,7 +33,7 @@ export function subscribe(readingId: string, listener: (event: ReadingEvent) => 
 /** Who has each reading open: readingId → userId → their name and how many streams (tabs) they have. */
 const viewers = new Map<string, Map<string, { name: string; streams: number }>>()
 
-const publishViewers = (readingId: string) =>
+const publishViewers = (readingId: string): void =>
   publish(readingId, {
     type: 'viewers',
     viewers: [...(viewers.get(readingId) ?? [])].map(([id, { name }]) => ({ id, name })),
@@ -40,7 +43,7 @@ const publishViewers = (readingId: string) =>
  * Records a user opening a reading and tells everyone on it (including them) who's here now. Returns
  * the matching "left" function. Someone with the reading open in two tabs counts once.
  */
-export function joinReading(readingId: string, user: { _id: string; name: string }) {
+export function joinReading(readingId: string, user: { _id: string; name: string }): () => void {
   const here = viewers.get(readingId) ?? new Map<string, { name: string; streams: number }>()
   viewers.set(readingId, here)
   const viewer = here.get(user._id) ?? { name: user.name, streams: 0 }

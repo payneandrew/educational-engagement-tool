@@ -1,5 +1,5 @@
 import { computed, inject, onScopeDispose, provide, reactive, ref, type InjectionKey } from 'vue'
-import type { AnnotationEvent, ReadingEvent } from '../../../server/src/realtime/events'
+import type { AnnotationEvent, ReadingEvent, Viewer } from '../../../server/src/realtime/events'
 import { client, messageOf, parseResponse, type Annotation } from '@/api/client'
 import { currentUserId } from '@/api/session'
 import { newId, withRetry } from '@/api/retry'
@@ -18,7 +18,7 @@ function createAnnotations(readingId: string) {
   /** True only after an established stream drops, so the first connect doesn't flash a warning. */
   const connectionLost = ref(false)
   /** Who has this reading open right now, from the server's `viewers` events. */
-  const viewers = ref<{ id: string; name: string }[]>([])
+  const viewers = ref<Viewer[]>([])
   const loadError = ref('')
   /** True until the first load finishes. Reloads after a reconnect keep showing the current list. */
   const loading = ref(true)
@@ -214,17 +214,20 @@ function createAnnotations(readingId: string) {
   }
 }
 
-const key: InjectionKey<ReturnType<typeof createAnnotations>> = Symbol('annotations')
+/** One reading's discussion, as `useAnnotations()` hands it to components. */
+export type Annotations = ReturnType<typeof createAnnotations>
+
+const key: InjectionKey<Annotations> = Symbol('annotations')
 
 /** Called once by the reading page: opens the live connection and shares it with the components below. */
-export function provideAnnotations(readingId: string) {
+export function provideAnnotations(readingId: string): Annotations {
   const annotations = createAnnotations(readingId)
   provide(key, annotations)
   return annotations
 }
 
 /** For components inside the reading page. */
-export function useAnnotations() {
+export function useAnnotations(): Annotations {
   const annotations = inject(key)
   if (!annotations) throw new Error('useAnnotations() needs provideAnnotations() in a parent')
   return annotations
