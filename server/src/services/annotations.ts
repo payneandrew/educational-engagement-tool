@@ -90,7 +90,9 @@ async function loadOwn(user: UserDoc, id: string) {
 }
 
 export async function editAnnotation(user: UserDoc, id: string, body: string) {
-  await loadOwn(user, id)
+  const current = await loadOwn(user, id)
+  // Saving the same words changes nothing: not marked edited, and nobody is notified.
+  if (current.body === body) return toDTO(current)
   const updated = await annotations.findOneAndUpdate(
     { _id: id },
     { $set: { body, editedAt: new Date() } },

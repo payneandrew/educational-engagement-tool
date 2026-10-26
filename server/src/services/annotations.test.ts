@@ -35,6 +35,14 @@ describe('live events', () => {
     elsewhere.stop()
   })
 
+  it('treats saving the same words as no edit: not marked edited, nothing published', async () => {
+    const root = await service.createRoot(alice, READING, 'unchanged')
+    const { got, stop } = listen(READING)
+    expect((await service.editAnnotation(alice, root.id, 'unchanged')).editedAt).toBeNull()
+    expect(got).toEqual([])
+    stop()
+  })
+
   it('publishes edits, marked as edited', async () => {
     const root = await service.createRoot(alice, READING, 'original wording')
     const { got, stop } = listen(READING)
