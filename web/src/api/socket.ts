@@ -19,7 +19,7 @@ export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io({
 })
 
 /** Opens the connection on first use (no-op while connected or already reconnecting). */
-export function ensureConnected() {
+export function ensureConnected(): void {
   if (!socket.active) socket.connect()
 }
 

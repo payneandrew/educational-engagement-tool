@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
+import Message from 'primevue/message'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import type { Annotation } from '@/api/client'
 import { currentUserId } from '@/api/session'
 import { useAnnotations } from '@/composables/useAnnotations'
@@ -21,14 +22,24 @@ const now = useNow()
 
 const editing = ref(false)
 const editDraft = ref('')
+const editBox = ref<{ $el: HTMLTextAreaElement }>()
 const error = ref('')
 
-function startEdit() {
+async function startEdit() {
   editDraft.value = props.post.body
   error.value = ''
   editing.value = true
+  await nextTick()
+  // Into the box the button just opened, with the cursor after the text, ready to add to it.
+  const box = editBox.value?.$el
+  box?.focus()
+  box?.setSelectionRange(box.value.length, box.value.length)
 }
 async function saveEdit() {
+  if (editDraft.value.trim() === props.post.body) {
+    editing.value = false // nothing changed, so there's nothing to save
+    return
+  }
   error.value = (await edit(props.post.id, editDraft.value)) ?? ''
   if (error.value) return
   editing.value = false
@@ -67,6 +78,7 @@ function confirmDelete() {
   <article
     class="flex gap-3 rounded-lg py-2"
     :class="highlight && '-mx-2 bg-accent/10 px-2'"
+    :data-new="newIds.has(post.id) ? post.id : undefined"
     :aria-label="`${post.kind === 'reply' ? 'Reply' : 'Annotation'} by ${post.authorName}`"
   >
     <UserAvatar :id="post.authorId" :name="post.authorName" />
@@ -87,11 +99,15 @@ function confirmDelete() {
         >
           · edited
         </span>
-        <Tag v-if="newIds.has(post.id)" value="New" severity="info" class="px-1.5 py-0 text-xs" />
+        <!-- Fades away once the post has been read (see useUnreadPosts). -->
+        <Transition leave-active-class="transition-opacity duration-700" leave-to-class="opacity-0">
+          <Tag v-if="newIds.has(post.id)" value="New" severity="info" class="px-1.5 py-0 text-xs" />
+        </Transition>
       </div>
 
       <form v-if="editing" class="mt-1.5 grid gap-2" @submit.prevent="saveEdit">
         <Textarea
+          ref="editBox"
           v-model="editDraft"
           auto-resize
           rows="3"
@@ -99,8 +115,9 @@ function confirmDelete() {
           aria-label="Edit your annotation"
           @keydown.meta.enter.prevent="saveEdit"
           @keydown.ctrl.enter.prevent="saveEdit"
+          @keydown.esc="editing = false"
         />
-        <p v-if="error" class="text-sm text-red-600" role="alert">{{ error }}</p>
+        <Message v-if="error" severity="error" size="small" variant="simple">{{ error }}</Message>
         <div class="flex justify-end gap-2">
           <Button label="Cancel" severity="secondary" text size="small" @click="editing = false" />
           <Button

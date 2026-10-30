@@ -7,5 +7,5 @@ const normalize = (text: string) =>
     .trim()
 
 /** Whether a title matches what was typed in the search box. An empty search matches everything. */
-export const titleMatches = (title: string, query: string) =>
+export const titleMatches = (title: string, query: string): boolean =>
   normalize(title).includes(normalize(query))

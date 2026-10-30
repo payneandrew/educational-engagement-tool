@@ -2,14 +2,14 @@ import type { Server as HttpServer } from 'node:http'
 import { Server, type Socket } from 'socket.io'
 import { readings, users } from '../db'
 import { subscriptionSchema } from '../schemas'
-import { onAnnotationEvent, readingIdOf } from './events'
+import { onEvent } from './events'
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
   SocketData,
   SubscribeResult,
-  Viewer,
 } from './protocol'
+import type { Viewer } from './schema'
 
 type IO = Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>
 type AppSocket = Socket<
@@ -28,7 +28,7 @@ const readingIdOfRoom = (room: string) =>
  *
  * - One socket per browser tab. The client subscribes to the readings it shows; each is a room.
  * - Writes stay on REST (validated, typed through Hono RPC). Fan-out comes from the domain events
- *   the annotation service publishes (events.ts), emitted to that reading's room.
+ *   the services publish (events.ts), emitted to that reading's room.
  * - Connection state recovery: each room broadcast carries an offset, and a client that drops for
  *   less than two minutes gets its rooms back and the events it missed replayed. After a longer gap
  *   (`socket.recovered` false) the client reloads the list over REST instead.
@@ -37,7 +37,7 @@ const readingIdOfRoom = (room: string) =>
  * To run several API servers, add an adapter that shares both (Redis Streams supports recovery);
  * nothing else changes.
  */
-export function attachSocketServer(httpServer: HttpServer) {
+export function attachSocketServer(httpServer: HttpServer): { io: IO; close: () => Promise<void> } {
   const io: IO = new Server(httpServer, {
     // WebSocket only, no long-polling fallback: no sticky sessions needed behind a load balancer.
     transports: ['websocket'],
@@ -59,13 +59,9 @@ export function attachSocketServer(httpServer: HttpServer) {
       .catch(() => next(new Error('server error')))
   })
 
-  const stopListening = onAnnotationEvent((event) => {
-    const room = io.to(roomOf(readingIdOf(event)))
-    if (event.type === 'deleted')
-      room.emit('annotation:deleted', { id: event.id, readingId: event.readingId })
-    else if (event.type === 'created') room.emit('annotation:created', event.annotation)
-    else room.emit('annotation:updated', event.annotation)
-  })
+  const stopListening = onEvent((readingId, event) =>
+    io.to(roomOf(readingId)).emit('reading:event', readingId, event),
+  )
 
   /** Presence is the room's membership: no separate bookkeeping, and it works across servers with an adapter. */
   async function broadcastViewers(readingId: string) {
@@ -74,7 +70,10 @@ export function attachSocketServer(httpServer: HttpServer) {
     for (const { data } of sockets)
       if (!viewers.has(data.user._id))
         viewers.set(data.user._id, { id: data.user._id, name: data.user.name })
-    io.to(roomOf(readingId)).emit('reading:viewers', { readingId, viewers: [...viewers.values()] })
+    io.to(roomOf(readingId)).emit('reading:event', readingId, {
+      type: 'viewers',
+      viewers: [...viewers.values()],
+    })
   }
 
   async function subscribe(socket: AppSocket, raw: unknown): Promise<SubscribeResult> {

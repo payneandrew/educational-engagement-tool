@@ -1,44 +1,45 @@
 import { computed, inject, onScopeDispose, provide, reactive, ref, type InjectionKey } from 'vue'
-import type { AnnotationEvent } from '../../../server/src/realtime/events'
-import { client, messageOf, unwrap, type Annotation } from '@/api/client'
+import {
+  parseReadingEvent,
+  type AnnotationEvent,
+  type Viewer,
+} from '../../../server/src/realtime/schema'
+import { client, messageOf, parseResponse, type Annotation } from '@/api/client'
 import { currentUserId } from '@/api/session'
 import { ensureConnected, socket } from '@/api/socket'
+import { newId, withRetry } from '@/api/retry'
 
 /**
  * One reading's discussion: the annotations, the live connection, and the actions that change them.
- * The reading page creates it with `provideAnnotations`; components below it get it with `useAnnotations`.
  *
- * Live updates come over the tab's shared Socket.IO connection. On mount (and on any reconnect the
- * server couldn't recover) we subscribe to the reading, then load the full list over REST and apply
- * live events on top. When the server *does* recover a short drop, it has already put us back in the
- * room and replayed what we missed, so there's nothing to reload. Events that arrive while a load is
- * in flight are held back and applied after it, so a slow response can't overwrite a newer edit or
- * bring back a deleted post.
+ * Live updates come over the tab's shared Socket.IO connection. On connect (or a reconnect the server
+ * couldn't recover) we subscribe to the reading, load the full list, and apply live events on top.
+ * When the server does recover a short drop, it has already restored our room and replayed what we
+ * missed. Events that arrive during a load are held and applied after it, so a slow response can't
+ * overwrite a newer edit or bring back a deleted post.
  */
 function createAnnotations(readingId: string) {
   const byId = reactive<Record<string, Annotation>>({})
-  /** True only after an established connection drops, so the first connect doesn't flash a warning. */
+  /** Only true after an established connection drops. */
   const connectionLost = ref(false)
-  /** Who has this reading open right now, from the server's `reading:viewers` events. */
-  const viewers = ref<{ id: string; name: string }[]>([])
+  const viewers = ref<Viewer[]>([])
   const loadError = ref('')
-  /** True until the first load finishes. Reloads after a reconnect keep showing the current list. */
   const loading = ref(true)
-  /** Posts that arrived live from someone else since the page opened; the feed marks them "New". */
+  /** Posts from other people that arrived live; the feed tags them "New". */
   const newIds = reactive(new Set<string>())
-  /** Read out by an aria-live region, so screen reader users hear about live arrivals too. */
+  /** Read out by an aria-live region. */
   const announcement = ref('')
   let pending: AnnotationEvent[] | null = null // non-null while a load is in flight
 
   function applyEvent(event: AnnotationEvent) {
-    if (event.type !== 'deleted') byId[event.annotation.id] = event.annotation
+    if (event.type === 'annotation') byId[event.annotation.id] = event.annotation
     // Deleting a top-level annotation also deleted its replies.
     else
       for (const annotation of Object.values(byId))
         if (annotation.id === event.id || annotation.parentId === event.id)
           delete byId[annotation.id]
   }
-  /** A live post someone else just wrote (not the echo of this user's own write). */
+  /** A live post by someone else (not an edit, not the echo of our own write). */
   function noteArrival({ id, authorId, authorName, kind }: Annotation) {
     if (loading.value || byId[id] || authorId === currentUserId.value) return
     newIds.add(id)
@@ -62,8 +63,8 @@ function createAnnotations(readingId: string) {
     pending = []
     try {
       await subscribe()
-      const list = await unwrap(
-        await client.api.readings[':id'].annotations.$get({ param: { id: readingId } }),
+      const list = await parseResponse(
+        client.api.readings[':id'].annotations.$get({ param: { id: readingId } }),
       )
       for (const id of Object.keys(byId)) delete byId[id]
       for (const annotation of list) byId[annotation.id] = annotation
@@ -79,20 +80,15 @@ function createAnnotations(readingId: string) {
   }
 
   // The socket is shared across pages, so ignore events for other readings.
-  const isHere = (payload: { readingId: string }) => payload.readingId === readingId
-  const onCreated = (annotation: Annotation) => {
-    if (!isHere(annotation)) return
-    noteArrival(annotation)
-    receive({ type: 'created', annotation })
-  }
-  const onUpdated = (annotation: Annotation) => {
-    if (isHere(annotation)) receive({ type: 'updated', annotation })
-  }
-  const onDeleted = (deleted: { id: string; readingId: string }) => {
-    if (isHere(deleted)) receive({ type: 'deleted', ...deleted })
-  }
-  const onViewers = (update: { readingId: string; viewers: { id: string; name: string }[] }) => {
-    if (isHere(update)) viewers.value = update.viewers
+  const onReadingEvent = (eventReadingId: string, payload: unknown) => {
+    if (eventReadingId !== readingId) return
+    const event = parseReadingEvent(payload)
+    if (!event) return console.warn('Ignored a live update it could not read:', payload)
+    if (event.type === 'viewers') viewers.value = event.viewers
+    else {
+      if (event.type === 'annotation') noteArrival(event.annotation)
+      receive(event)
+    }
   }
   const onConnect = () => {
     connectionLost.value = false
@@ -115,10 +111,7 @@ function createAnnotations(readingId: string) {
     }
   }
 
-  socket.on('annotation:created', onCreated)
-  socket.on('annotation:updated', onUpdated)
-  socket.on('annotation:deleted', onDeleted)
-  socket.on('reading:viewers', onViewers)
+  socket.on('reading:event', onReadingEvent)
   socket.on('connect', onConnect)
   socket.on('disconnect', onDisconnect)
   socket.on('connect_error', onConnectError)
@@ -127,10 +120,7 @@ function createAnnotations(readingId: string) {
   else ensureConnected()
 
   onScopeDispose(() => {
-    socket.off('annotation:created', onCreated)
-    socket.off('annotation:updated', onUpdated)
-    socket.off('annotation:deleted', onDeleted)
-    socket.off('reading:viewers', onViewers)
+    socket.off('reading:event', onReadingEvent)
     socket.off('connect', onConnect)
     socket.off('disconnect', onDisconnect)
     socket.off('connect_error', onConnectError)
@@ -151,7 +141,7 @@ function createAnnotations(readingId: string) {
   )
 
   const total = computed(() => all.value.length)
-  /** Everyone who has posted here, with how many annotations each, sorted by name. */
+  /** Everyone who has posted, with their annotation counts, sorted by name. */
   const authors = computed(() => {
     const authorsById = new Map<string, { id: string; name: string; count: number }>()
     for (const annotation of all.value) {
@@ -165,13 +155,11 @@ function createAnnotations(readingId: string) {
   // Only students can post, so the authors are the students participating.
   const studentCount = computed(() => authors.value.length)
 
-  /** True while one of this user's writes is in flight; the forms disable their buttons. */
   const busy = ref(false)
 
   /**
-   * Runs one of this user's writes and applies the result right away, so the author sees it without
-   * waiting for the live event (which arrives too and just sets the same values again). It goes through
-   * `receive`, like a live event, so the same ordering rules hold. Resolves to an error message, or null.
+   * Runs one of this user's writes and applies the result right away instead of waiting for the SSE
+   * echo. Goes through `receive`, so the same ordering rules hold. Resolves to an error message or null.
    */
   async function write(request: () => Promise<AnnotationEvent>): Promise<string | null> {
     busy.value = true
@@ -185,38 +173,42 @@ function createAnnotations(readingId: string) {
     }
   }
 
+  // The id is picked here so a retry after a lost response reuses it (the server dedupes on it).
+  const post = (
+    send: (json: { body: string; id: string }) => Promise<Annotation>,
+    body: string,
+  ) => {
+    const id = newId()
+    return write(async () => ({
+      type: 'annotation',
+      annotation: await withRetry(() => send({ body, id })),
+    }))
+  }
   const create = (body: string) =>
-    write(async () => ({
-      type: 'created',
-      annotation: await unwrap(
-        await client.api.readings[':id'].annotations.$post({
-          param: { id: readingId },
-          json: { body },
-        }),
-      ),
-    }))
+    post(
+      (json) =>
+        parseResponse(
+          client.api.readings[':id'].annotations.$post({ param: { id: readingId }, json }),
+        ),
+      body,
+    )
   const reply = (rootId: string, body: string) =>
-    write(async () => ({
-      type: 'created',
-      annotation: await unwrap(
-        await client.api.annotations[':id'].replies.$post({
-          param: { id: rootId },
-          json: { body },
-        }),
-      ),
-    }))
+    post(
+      (json) =>
+        parseResponse(client.api.annotations[':id'].replies.$post({ param: { id: rootId }, json })),
+      body,
+    )
   const edit = (id: string, body: string) =>
     write(async () => ({
-      type: 'updated',
-      annotation: await unwrap(
-        await client.api.annotations[':id'].$patch({ param: { id }, json: { body } }),
+      type: 'annotation',
+      annotation: await parseResponse(
+        client.api.annotations[':id'].$patch({ param: { id }, json: { body } }),
       ),
     }))
   const remove = (id: string) =>
     write(async () => ({
       type: 'deleted',
-      id: (await unwrap(await client.api.annotations[':id'].$delete({ param: { id } }))).id,
-      readingId,
+      id: (await parseResponse(client.api.annotations[':id'].$delete({ param: { id } }))).id,
     }))
 
   return {
@@ -239,17 +231,18 @@ function createAnnotations(readingId: string) {
   }
 }
 
-const key: InjectionKey<ReturnType<typeof createAnnotations>> = Symbol('annotations')
+export type Annotations = ReturnType<typeof createAnnotations>
 
-/** Called once by the reading page: opens the live connection and shares it with the components below. */
-export function provideAnnotations(readingId: string) {
+const key: InjectionKey<Annotations> = Symbol('annotations')
+
+/** Called once by the reading page: opens the connection and shares it with child components. */
+export function provideAnnotations(readingId: string): Annotations {
   const annotations = createAnnotations(readingId)
   provide(key, annotations)
   return annotations
 }
 
-/** For components inside the reading page. */
-export function useAnnotations() {
+export function useAnnotations(): Annotations {
   const annotations = inject(key)
   if (!annotations) throw new Error('useAnnotations() needs provideAnnotations() in a parent')
   return annotations

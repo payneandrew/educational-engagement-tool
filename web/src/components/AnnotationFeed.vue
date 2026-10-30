@@ -2,10 +2,12 @@
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Select from 'primevue/select'
+import Skeleton from 'primevue/skeleton'
 import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import { computed, nextTick, ref } from 'vue'
 import { useAnnotations } from '@/composables/useAnnotations'
+import { useUnreadPosts } from '@/composables/useUnreadPosts'
 import { plural } from '@/utils/format'
 import AnnotationPost from './AnnotationPost.vue'
 
@@ -22,6 +24,7 @@ const {
   reply,
   connectionLost,
   announcement,
+  newIds,
 } = useAnnotations()
 const toast = useToast()
 
@@ -43,6 +46,11 @@ const visibleRoots = computed(() => {
     (root) => root.authorId === id || repliesOf(root.id).some((reply) => reply.authorId === id),
   )
 })
+
+// The "N new annotations" pills, and "New" tags fading once a post has been read (see the composable).
+// Only the panel scrolls on desktop; on phones the page does.
+const scroller = ref<HTMLElement>()
+const { hidden: hiddenNew, jumpToNew } = useUnreadPosts(scroller, newIds, () => visibleRoots.value)
 
 const draft = ref('')
 const draftError = ref('')
@@ -115,11 +123,10 @@ async function sendReply(rootId: string) {
         @keydown.meta.enter.prevent="post"
         @keydown.ctrl.enter.prevent="post"
       />
-      <p v-if="draftError" class="text-sm text-red-600" role="alert">
+      <Message v-if="draftError" severity="error" size="small" variant="simple">
         {{ draftError }}
-      </p>
-      <div class="flex items-center justify-between gap-2">
-        <span class="text-xs text-muted">⌘/Ctrl + Enter to post</span>
+      </Message>
+      <div class="flex justify-end">
         <Button
           type="submit"
           label="Post"
@@ -131,10 +138,39 @@ async function sendReply(rootId: string) {
       </div>
     </form>
 
-    <div class="min-h-0 flex-1 overflow-y-auto px-4">
-      <p v-if="loading" class="py-6 text-center text-sm text-muted" role="status">
-        Loading discussion…
-      </p>
+    <!-- On phones the page scrolls rather than the panel, and the pills stick to the screen. -->
+    <div ref="scroller" class="min-h-0 flex-1 px-4 lg:overflow-y-auto">
+      <div class="sticky top-20 z-10 h-0 lg:top-3">
+        <Transition
+          enter-active-class="transition duration-200"
+          enter-from-class="opacity-0"
+          leave-active-class="transition duration-150"
+          leave-to-class="opacity-0"
+        >
+          <div v-if="hiddenNew.above" class="flex justify-center">
+            <Button
+              :label="plural(hiddenNew.above, 'new annotation')"
+              :aria-label="`${plural(hiddenNew.above, 'new annotation')} above. Jump to them`"
+              icon="pi pi-arrow-up"
+              icon-pos="right"
+              size="small"
+              rounded
+              class="shadow-md"
+              @click="jumpToNew('above')"
+            />
+          </div>
+        </Transition>
+      </div>
+      <div v-if="loading" class="grid gap-5 py-4" role="status" aria-label="Loading discussion">
+        <div v-for="n in 3" :key="n" class="flex gap-3">
+          <Skeleton shape="circle" size="2rem" class="shrink-0" />
+          <div class="grid flex-1 gap-2">
+            <Skeleton width="40%" height="0.875rem" />
+            <Skeleton height="1rem" />
+            <Skeleton width="75%" height="1rem" />
+          </div>
+        </div>
+      </div>
       <div v-else-if="!roots.length" class="py-10 text-center">
         <i class="pi pi-comments text-3xl text-muted" aria-hidden="true" />
         <p class="mt-2 font-medium">No annotations yet</p>
@@ -176,9 +212,9 @@ async function sendReply(rootId: string) {
                 @keydown.ctrl.enter.prevent="sendReply(root.id)"
                 @keydown.esc="replyingTo = null"
               />
-              <p v-if="replyError" class="text-sm text-red-600" role="alert">
+              <Message v-if="replyError" severity="error" size="small" variant="simple">
                 {{ replyError }}
-              </p>
+              </Message>
               <div class="flex justify-end gap-2">
                 <Button
                   label="Cancel"
@@ -208,6 +244,27 @@ async function sendReply(rootId: string) {
           </template>
         </li>
       </ol>
+      <div class="sticky bottom-4 z-10 h-0">
+        <Transition
+          enter-active-class="transition duration-200"
+          enter-from-class="opacity-0"
+          leave-active-class="transition duration-150"
+          leave-to-class="opacity-0"
+        >
+          <div v-if="hiddenNew.below" class="flex -translate-y-full justify-center">
+            <Button
+              :label="plural(hiddenNew.below, 'new annotation')"
+              :aria-label="`${plural(hiddenNew.below, 'new annotation')} below. Jump to them`"
+              icon="pi pi-arrow-down"
+              icon-pos="right"
+              size="small"
+              rounded
+              class="shadow-md"
+              @click="jumpToNew('below')"
+            />
+          </div>
+        </Transition>
+      </div>
     </div>
   </section>
 </template>

@@ -14,11 +14,17 @@ export default defineConfigWithVueTs(
   vueTsConfigs.recommended,
   { ...pluginVitest.configs.recommended, files: ['**/*.test.ts'] },
 
-  // One addition beyond create-vue's defaults: typescript-eslint's promise rules (part of its
-  // `recommendedTypeChecked` preset). An unhandled promise rejection crashes the Node server, and these
-  // catch promises that are neither awaited nor handled. `void promise` marks a deliberate fire-and-forget.
+  // Beyond create-vue's defaults:
+  // - typescript-eslint's promise rules (part of its `recommendedTypeChecked` preset). An unhandled
+  //   promise rejection crashes the Node server, and these catch promises that are neither awaited nor
+  //   handled. `void promise` marks a deliberate fire-and-forget.
+  // - Explicit return types on exported functions: what a module returns is a contract, so it is
+  //   written down instead of inferred from the body. Inner closures and Vue handlers are exempt.
+  // - No `!` and no object-literal casts: both tell the compiler to stop checking. Narrow the value (or
+  //   throw) instead, and give a literal a type with `: Type` or `satisfies`. Other `as` casts stay
+  //   allowed (`as const` is not really a cast), but each is a deliberate decision.
   {
-    name: 'app/promises',
+    name: 'app/strict-types',
     files: ['**/*.{ts,mts,vue}'],
     languageOptions: {
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
@@ -30,6 +36,12 @@ export default defineConfigWithVueTs(
         { checksVoidReturn: { attributes: false } },
       ],
       '@typescript-eslint/await-thenable': 'error',
+      '@typescript-eslint/explicit-module-boundary-types': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'error',
+      '@typescript-eslint/consistent-type-assertions': [
+        'error',
+        { assertionStyle: 'as', objectLiteralTypeAssertions: 'never' },
+      ],
     },
   },
 

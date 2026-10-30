@@ -1,5 +1,4 @@
 import { serve } from '@hono/node-server'
-import { MongoMemoryServer } from 'mongodb-memory-server'
 import type { Server as HttpServer } from 'node:http'
 import {
   io as connect,
@@ -8,15 +7,19 @@ import {
   type ManagerOptions,
 } from 'socket.io-client'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { app } from '../app'
+import { useTestDatabase } from '../test/database'
 import type { ClientToServerEvents, ServerToClientEvents, Subscription } from './protocol'
+import type { ReadingEvent } from './schema'
+import { attachSocketServer } from './socket'
 
 // A real HTTP server with Socket.IO attached, driven by the real client, against a throwaway MongoDB.
 type Client = Socket<ServerToClientEvents, ClientToServerEvents>
-type Payload<E extends keyof ServerToClientEvents> = Parameters<ServerToClientEvents[E]>[0]
+type EventOfType<T extends ReadingEvent['type']> = Extract<ReadingEvent, { type: T }>
 
-let mongod: MongoMemoryServer
-let modules: { app: (typeof import('../app'))['app']; db: typeof import('../db') }
-let realtime: ReturnType<(typeof import('./socket'))['attachSocketServer']>
+useTestDatabase()
+
+let realtime: ReturnType<typeof attachSocketServer>
 let url = ''
 const clients: Client[] = []
 
@@ -47,27 +50,29 @@ const connected = (client: Client) =>
     client.once('connect_error', reject)
   })
 
-/** The next payload of `event` on `client`. Register it before triggering the event. */
-function next<E extends keyof ServerToClientEvents>(client: Client, event: E) {
-  return new Promise<Payload<E>>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`no ${event} within 3s`)), 3000)
-    const listener = (payload: Payload<E>) => {
+/** The next event of `type` on `client`. Register it before triggering the event. */
+function next<T extends ReadingEvent['type']>(client: Client, type: T) {
+  return new Promise<EventOfType<T>>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`no ${type} event within 3s`)), 3000)
+    const listener = (_readingId: string, event: ReadingEvent) => {
+      if (event.type !== type) return
       clearTimeout(timer)
-      resolve(payload)
+      client.off('reading:event', listener)
+      resolve(event as EventOfType<T>)
     }
-    client.once(event, listener as never)
+    client.on('reading:event', listener)
   })
 }
 
-/** Everything `client` receives from now on, in order. */
+/** Every event `client` receives from now on, in order. */
 function record(client: Client) {
-  const got: string[] = []
-  client.onAny((event: string) => got.push(event))
+  const got: ReadingEvent[] = []
+  client.on('reading:event', (_readingId, event) => got.push(event))
   return got
 }
 
 const send = async (method: string, path: string, userId: string, json?: unknown) =>
-  modules.app.request(`/api${path}`, {
+  app.request(`/api${path}`, {
     method,
     headers: { 'x-user-id': userId, 'content-type': 'application/json' },
     body: json === undefined ? undefined : JSON.stringify(json),
@@ -78,20 +83,14 @@ const post = async (userId: string, body: string) =>
   }
 
 beforeAll(async () => {
-  mongod = await MongoMemoryServer.create({ binary: { version: '7.0.14' } })
-  process.env.MONGO_URI = mongod.getUri()
-  modules = { app: (await import('../app')).app, db: await import('../db') }
-  await modules.db.initDb()
-  await (await import('../seed')).seed()
-  const { attachSocketServer } = await import('./socket')
   await new Promise<void>((resolve) => {
-    const server = serve({ fetch: modules.app.fetch, port: 0 }, (info) => {
+    const server = serve({ fetch: app.fetch, port: 0 }, (info) => {
       url = `http://localhost:${info.port}`
       resolve()
     })
     realtime = attachSocketServer(server as HttpServer)
   })
-}, 120_000)
+})
 
 afterEach(() => {
   for (const client of clients.splice(0)) client.disconnect()
@@ -99,8 +98,6 @@ afterEach(() => {
 
 afterAll(async () => {
   await realtime.close()
-  await modules.db.mongo.close()
-  await mongod.stop()
 })
 
 describe('handshake', () => {
@@ -120,7 +117,8 @@ describe('subscribe', () => {
       error: 'reading not found',
     })
     // Socket payloads are untrusted input, validated like request bodies.
-    expect(await client.emitWithAck('subscribe', { type: 'course' } as never)).toEqual({
+    const malformed: unknown = { type: 'course' }
+    expect(await client.emitWithAck('subscribe', malformed as never)).toEqual({
       ok: false,
       error: 'invalid subscription',
     })
@@ -128,7 +126,7 @@ describe('subscribe', () => {
 })
 
 describe('fan-out', () => {
-  it("pushes created, updated and deleted to that reading's room only", async () => {
+  it("pushes annotation changes and deletes to that reading's room only", async () => {
     const viewer = open('u-alice')
     const elsewhere = open('u-carol')
     await Promise.all([connected(viewer), connected(elsewhere)])
@@ -136,19 +134,23 @@ describe('fan-out', () => {
     await elsewhere.emitWithAck('subscribe', { type: 'reading', readingId: OTHER_READING })
     const elsewhereGot = record(elsewhere)
 
-    const created = next(viewer, 'annotation:created')
+    const created = next(viewer, 'annotation')
     const { id } = await post('u-bob', 'live from Bob')
-    expect(await created).toMatchObject({ id, body: 'live from Bob', authorName: 'Bob Okafor' })
+    expect((await created).annotation).toMatchObject({
+      id,
+      body: 'live from Bob',
+      authorName: 'Bob Okafor',
+    })
 
-    const updated = next(viewer, 'annotation:updated')
+    const updated = next(viewer, 'annotation')
     await send('PATCH', `/annotations/${id}`, 'u-bob', { body: 'edited by Bob' })
-    expect(await updated).toMatchObject({ id, body: 'edited by Bob' })
+    expect((await updated).annotation).toMatchObject({ id, body: 'edited by Bob' })
 
-    const deleted = next(viewer, 'annotation:deleted')
+    const deleted = next(viewer, 'deleted')
     await send('DELETE', `/annotations/${id}`, 'u-bob')
-    expect(await deleted).toEqual({ id, readingId: READING })
+    expect(await deleted).toEqual({ type: 'deleted', id })
 
-    expect(elsewhereGot.filter((event) => event.startsWith('annotation:'))).toEqual([])
+    expect(elsewhereGot.filter((event) => event.type !== 'viewers')).toEqual([])
   })
 
   it('stops after unsubscribe', async () => {
@@ -161,7 +163,7 @@ describe('fan-out', () => {
     await client.emitWithAck('subscribe', { type: 'reading', readingId: OTHER_READING })
     await post('u-bob', 'nobody here is listening')
     await new Promise((resolve) => setTimeout(resolve, 200))
-    expect(got.filter((event) => event.startsWith('annotation:'))).toEqual([])
+    expect(got.filter((event) => event.type === 'annotation')).toEqual([])
   })
 })
 
@@ -172,23 +174,23 @@ describe('presence', () => {
     const alicesSecondTab = open('u-alice')
     await Promise.all([danasTab, alicesTab, alicesSecondTab].map(connected))
 
-    let danaSees = next(danasTab, 'reading:viewers')
+    let danaSees = next(danasTab, 'viewers')
     await danasTab.emitWithAck('subscribe', here)
     expect((await danaSees).viewers).toEqual([dana])
 
-    danaSees = next(danasTab, 'reading:viewers')
+    danaSees = next(danasTab, 'viewers')
     await alicesTab.emitWithAck('subscribe', here)
     expect((await danaSees).viewers).toEqual([dana, alice])
 
     // A second tab of Alice's doesn't count her twice, and closing it doesn't remove her.
-    danaSees = next(danasTab, 'reading:viewers')
+    danaSees = next(danasTab, 'viewers')
     await alicesSecondTab.emitWithAck('subscribe', here)
     expect((await danaSees).viewers).toEqual([dana, alice])
-    danaSees = next(danasTab, 'reading:viewers')
+    danaSees = next(danasTab, 'viewers')
     alicesSecondTab.disconnect()
     expect((await danaSees).viewers).toEqual([dana, alice])
 
-    danaSees = next(danasTab, 'reading:viewers')
+    danaSees = next(danasTab, 'viewers')
     alicesTab.disconnect()
     expect((await danaSees).viewers).toEqual([dana])
   })
@@ -206,12 +208,13 @@ describe('connection state recovery', () => {
     await dropped
     const { id } = await post('u-bob', 'posted while Alice was offline')
 
-    const got = record(client)
-    const replayed = next(client, 'annotation:created')
+    const replayed = next(client, 'annotation')
     await connected(client)
     expect(client.recovered).toBe(true)
-    expect(await replayed).toMatchObject({ id, body: 'posted while Alice was offline' })
-    expect(got.indexOf('annotation:created')).toBeGreaterThanOrEqual(0)
+    expect((await replayed).annotation).toMatchObject({
+      id,
+      body: 'posted while Alice was offline',
+    })
   })
 
   it('does not recover a deliberate disconnect (e.g. switching user): the client starts over', async () => {

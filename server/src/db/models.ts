@@ -4,32 +4,27 @@ export interface UserDoc {
   role: 'student' | 'instructor'
 }
 
-/** A reading an instructor has assigned. */
 export interface ReadingDoc {
   _id: string
   title: string
   description: string
   /** The instructor's user id. */
   createdBy: string
-  /** Denormalized, like an annotation's authorName: showing a reading never needs a user lookup. */
+  /** Denormalized, like authorName. */
   createdByName: string
   createdAt: Date
 }
 
-/**
- * Root comments and replies share ONE collection: one query loads a reading's whole discussion.
- * `kind` and `parentId` tell them apart. Replies are one level deep (parentId always points at a root).
- */
+/** Roots and replies share one collection; replies are one level deep (parentId is always a root). */
 export interface AnnotationDoc {
   _id: string
   readingId: string
   kind: 'root' | 'reply'
   parentId: string | null
   authorId: string
-  /** Denormalized: names are display-only here, and a thread render shouldn't need a user join. */
+  /** Denormalized so rendering a thread needs no user lookup. */
   authorName: string
   body: string
   createdAt: Date
-  /** Set when the author edits the body. */
   editedAt: Date | null
 }

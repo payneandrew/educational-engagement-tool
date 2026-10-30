@@ -1,12 +1,25 @@
 import { annotations, readings, users } from '../db'
 
+export type ParticipationDTO = {
+  /** The columns, oldest assignment first. */
+  readings: { id: string; title: string }[]
+  students: {
+    id: string
+    name: string
+    /** Annotations (replies included) per reading, in the same order as `readings`. */
+    perReading: number[]
+    total: number
+    readingsParticipated: number
+  }[]
+}
+
 /**
  * Every student's annotation count on every reading: the instructor's participation dashboard.
  *
  * Students come from `users`, not from the annotations, so a student who hasn't posted anywhere still
  * gets a row (of zeros). Those are the students an instructor most needs to see.
  */
-export async function participation() {
+export async function getParticipation(): Promise<ParticipationDTO> {
   const [students, readingList, counts] = await Promise.all([
     users.find({ role: 'student' }).sort({ name: 1 }).toArray(),
     // Oldest first, like a gradebook: columns read in the order the readings were assigned.
@@ -25,7 +38,6 @@ export async function participation() {
   return {
     readings: readingList.map((reading) => ({ id: reading._id, title: reading.title })),
     students: students.map((student) => {
-      /** Annotations (replies included) per reading, in the same order as `readings`. */
       const perReading = readingList.map(
         (reading) => countOf.get(`${student._id}|${reading._id}`) ?? 0,
       )

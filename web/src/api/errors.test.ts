@@ -1,39 +1,46 @@
+import { parseResponse } from 'hono/client'
 import { describe, expect, it } from 'vitest'
-import { messageOf, unwrap } from './errors'
+import { messageOf } from './errors'
 
-const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status })
+/** What `parseResponse` throws for a failed response, exactly as the app meets it. */
+async function failureFor(response: Response) {
+  try {
+    await parseResponse(Promise.resolve(response) as never)
+  } catch (error) {
+    return error
+  }
+  throw new Error('expected parseResponse to throw')
+}
 
-describe('unwrap', () => {
-  it('returns the body of a successful response', async () => {
-    expect(await unwrap(json(200, { id: 'r1' }))).toEqual({ id: 'r1' })
-  })
-
-  it("throws the API's own error message", async () => {
-    await expect(
-      unwrap(json(403, { error: 'only students can post annotations' })),
-    ).rejects.toThrow('only students can post annotations')
-  })
-
-  it('explains an empty or non-JSON error body instead of a JSON parse error', async () => {
-    // What Vite's dev proxy sends while the API is restarting.
-    await expect(unwrap(new Response('', { status: 502 }))).rejects.toThrow(
-      'The server is unavailable right now. Please try again in a moment.',
-    )
-    await expect(unwrap(new Response('<html>Not found</html>', { status: 404 }))).rejects.toThrow(
-      'Request failed (HTTP 404).',
-    )
-  })
-})
+const json = (status: number, body: unknown) =>
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
 describe('messageOf', () => {
+  it("shows the API's own error message", async () => {
+    const error = await failureFor(json(403, { error: 'only students can post annotations' }))
+    expect(messageOf(error)).toBe('only students can post annotations')
+  })
+
+  it("explains a failure the API didn't word itself", async () => {
+    // What Vite's dev proxy sends while the API is restarting.
+    expect(messageOf(await failureFor(new Response('', { status: 502 })))).toBe(
+      'The server is unavailable right now. Please try again in a moment.',
+    )
+    expect(
+      messageOf(await failureFor(new Response('<html>Not found</html>', { status: 404 }))),
+    ).toBe('Something went wrong. Please try again.')
+  })
+
   it('explains a network failure (fetch rejects with a TypeError)', () => {
     expect(messageOf(new TypeError('Failed to fetch'))).toBe(
       "Couldn't reach the server. Check your connection and try again.",
     )
   })
 
-  it('uses an Error’s message, and copes with anything else being thrown', () => {
-    expect(messageOf(new Error('reading not found'))).toBe('reading not found')
-    expect(messageOf('plain string')).toBe('plain string')
+  it('never shows the user the raw text of an unexpected error', () => {
+    expect(messageOf(new Error("Cannot read properties of undefined (reading 'id')"))).toBe(
+      'Something went wrong. Please try again.',
+    )
+    expect(messageOf('a thrown string')).toBe('Something went wrong. Please try again.')
   })
 })

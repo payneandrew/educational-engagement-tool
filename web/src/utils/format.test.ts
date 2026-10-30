@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { initials, relativeTime } from './format'
+import { initials, oneDecimal, relativeTime } from './format'
 
 describe('relativeTime', () => {
   const now = Date.parse('2026-10-26T15:00:00Z')
@@ -25,5 +25,11 @@ describe('initials', () => {
     expect(initials('Prof. Dana Reyes')).toBe('DR')
     expect(initials('Émile Durkheim')).toBe('ÉD')
     expect(initials('Plato')).toBe('P')
+  })
+})
+
+describe('oneDecimal', () => {
+  it('always shows one decimal place', () => {
+    expect([2, 2.04, 2.06, 5 / 3].map(oneDecimal)).toEqual(['2.0', '2.0', '2.1', '1.7'])
   })
 })

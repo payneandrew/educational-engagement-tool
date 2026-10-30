@@ -17,6 +17,10 @@
   --color-muted: var(--p-text-muted-color);
   --color-line: var(--p-content-border-color);
   --color-accent: var(--p-primary-color);
+  /* The Participation heat scale (utils/heat.ts): the theme's indigo, light to dark. */
+  --color-heat-1: var(--p-indigo-400);
+  --color-heat-2: var(--p-indigo-600);
+  --color-heat-3: var(--p-indigo-800);
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
   /* Reading material is set in a book face, as on paper; the interface stays in Inter. */
   --font-serif: 'Literata Variable', Georgia, serif;

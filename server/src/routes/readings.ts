@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
-import { instructorOnly, studentOnly, type AppEnv } from '../middleware/auth'
+import { requireInstructor, requireStudent, type AppEnv } from '../middleware/auth'
 import { validate } from '../middleware/validate'
-import { bodySchema, readingSchema } from '../schemas'
+import { createAnnotationSchema, createReadingSchema } from '../schemas'
 import { createRoot, listAnnotations } from '../services/annotations'
 import { createReading, getReading, listReadings } from '../services/readings'
 
@@ -9,7 +9,7 @@ import { createReading, getReading, listReadings } from '../services/readings'
 export const readingsRoutes = new Hono<AppEnv>()
   .get('/', async (c) => c.json(await listReadings()))
 
-  .post('/', instructorOnly, validate('json', readingSchema), async (c) =>
+  .post('/', requireInstructor, validate('json', createReadingSchema), async (c) =>
     c.json(await createReading(c.get('user'), c.req.valid('json')), 201),
   )
 
@@ -19,6 +19,7 @@ export const readingsRoutes = new Hono<AppEnv>()
 
   // Returns the saved annotation (so the author's UI updates immediately); it's also pushed to
   // everyone viewing the reading over Socket.IO.
-  .post('/:id/annotations', studentOnly, validate('json', bodySchema), async (c) =>
-    c.json(await createRoot(c.get('user'), c.req.param('id'), c.req.valid('json').body), 201),
-  )
+  .post('/:id/annotations', requireStudent, validate('json', createAnnotationSchema), async (c) => {
+    const { body, id } = c.req.valid('json')
+    return c.json(await createRoot(c.get('user'), c.req.param('id'), body, id), 201)
+  })

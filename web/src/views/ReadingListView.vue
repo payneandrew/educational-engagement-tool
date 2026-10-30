@@ -9,7 +9,7 @@ import Skeleton from 'primevue/skeleton'
 import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import { computed, onMounted, ref } from 'vue'
-import { client, messageOf, unwrap, type Reading } from '@/api/client'
+import { client, messageOf, parseResponse, type Reading } from '@/api/client'
 import { formatDate, plural } from '@/utils/format'
 import { titleMatches } from '@/utils/search'
 
@@ -26,7 +26,7 @@ const matchingReadings = computed(
 
 onMounted(async () => {
   try {
-    readings.value = await unwrap(await client.api.readings.$get())
+    readings.value = await parseResponse(client.api.readings.$get())
   } catch (error) {
     loadError.value = messageOf(error)
   }
@@ -48,8 +48,8 @@ async function create() {
   busy.value = true
   formError.value = ''
   try {
-    const created = await unwrap(
-      await client.api.readings.$post({
+    const created = await parseResponse(
+      client.api.readings.$post({
         json: { title: title.value, description: description.value },
       }),
     )
@@ -141,10 +141,10 @@ async function create() {
             :href="`#/reading/${reading.id}`"
             class="group block rounded-xl border border-line bg-panel px-5 py-4 transition hover:border-accent hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
-            <h2 class="font-serif text-lg font-semibold group-hover:text-accent">
+            <h2 class="font-serif text-lg font-semibold wrap-anywhere group-hover:text-accent">
               {{ reading.title }}
             </h2>
-            <p class="mt-1 line-clamp-2 text-muted">{{ reading.description }}</p>
+            <p class="mt-1 line-clamp-2 wrap-anywhere text-muted">{{ reading.description }}</p>
             <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               <span class="text-muted">
                 {{ reading.createdByName }} · {{ formatDate(reading.createdAt) }}
@@ -177,7 +177,7 @@ async function create() {
             id="reading-title"
             v-model="title"
             maxlength="200"
-            placeholder="e.g. Mill — On Liberty, Chapter 2"
+            placeholder="e.g. Mill, On Liberty, Chapter 2"
             autofocus
           />
         </div>

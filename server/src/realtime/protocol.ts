@@ -3,12 +3,7 @@
  * imports AppType for REST). Socket.IO checks every emit and handler against these maps.
  */
 import type { UserDoc } from '../db/models'
-import type { AnnotationDTO } from '../services/annotations'
-
-export interface Viewer {
-  id: string
-  name: string
-}
+import type { ReadingEvent } from './schema'
 
 /** What a client can ask to receive. One kind today; the `type` leaves room for course- or user-wide feeds. */
 export interface Subscription {
@@ -19,11 +14,8 @@ export interface Subscription {
 export type SubscribeResult = { ok: true } | { ok: false; error: string }
 
 export interface ServerToClientEvents {
-  'annotation:created': (annotation: AnnotationDTO) => void
-  'annotation:updated': (annotation: AnnotationDTO) => void
-  'annotation:deleted': (deleted: { id: string; readingId: string }) => void
-  /** Who has the reading open right now, each person once however many tabs they have. */
-  'reading:viewers': (update: { readingId: string; viewers: Viewer[] }) => void
+  /** One message type for everything on a reading: annotation changes, and who has it open. */
+  'reading:event': (readingId: string, event: ReadingEvent) => void
 }
 
 export interface ClientToServerEvents {
