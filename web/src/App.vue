@@ -54,8 +54,10 @@ const navLink = (active: boolean) =>
 
 <template>
   <header class="sticky top-0 z-10 border-b border-line bg-panel/90 backdrop-blur">
-    <div class="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
-      <a href="#" class="flex items-center gap-2" aria-label="Gloss, all readings">
+    <div
+      class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 px-4 sm:h-16 sm:flex-nowrap sm:gap-x-6 sm:px-6"
+    >
+      <a href="#" class="flex h-16 items-center gap-2 sm:h-auto" aria-label="Gloss, all readings">
         <span
           class="grid size-8 place-items-center rounded-lg bg-accent text-white"
           aria-hidden="true"
@@ -66,7 +68,7 @@ const navLink = (active: boolean) =>
       </a>
       <nav
         v-if="currentUser?.role === 'instructor'"
-        class="hidden h-full gap-5 text-sm sm:flex"
+        class="order-last flex h-11 w-full gap-5 border-t border-line text-sm sm:order-none sm:h-full sm:w-auto sm:border-t-0"
         aria-label="Main"
       >
         <a
@@ -86,7 +88,7 @@ const navLink = (active: boolean) =>
           Participation
         </a>
       </nav>
-      <div v-if="users.length" class="ml-auto flex items-center gap-2">
+      <div v-if="users.length" class="ml-auto flex h-16 items-center gap-2 sm:h-auto">
         <label for="viewing-as" class="hidden text-sm text-muted md:block">Viewing as</label>
         <Select
           v-model="currentUserId"

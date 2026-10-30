@@ -71,4 +71,4 @@ Vue ──REST (typed hc client)──▶ Hono ──▶ MongoDB
 `npm test` runs Vitest. Tests sit next to the code they cover (`*.test.ts`).
 
 - **Server:** the API over HTTP (roles, validation, error responses, counts, the live stream) and the annotation service (live events, edit and delete rules, safe retries with client-chosen ids). They run against a real, throwaway MongoDB: one per test run, with a separate database for each test file (`server/src/test/`).
-- **Web:** the logic that doesn't need a browser: error messages, reading search, date formatting, and retrying requests.
+- **Web:** the logic that doesn't need a browser: error messages, reading search, date formatting, retrying requests, the participation heat steps, and the participation table's class averages and CSV.
