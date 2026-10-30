@@ -119,7 +119,7 @@ describe('rules', () => {
     })
   })
 
-  it('lists a reading’s annotations newest first', async () => {
+  it('lists annotations newest first', async () => {
     const first = await service.createRoot(alice, READING, 'first')
     await new Promise((resolve) => setTimeout(resolve, 5)) // distinct createdAt
     const second = await service.createRoot(bob, READING, 'second')

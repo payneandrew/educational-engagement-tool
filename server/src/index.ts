@@ -7,7 +7,7 @@ const port = Number(process.env.PORT ?? 3001)
 
 await initDb()
 if ((await readings.countDocuments()) === 0) {
-  console.log('[api] empty database, seeding…')
+  console.log('[api] empty database, seeding...')
   await seedDemo()
 }
 

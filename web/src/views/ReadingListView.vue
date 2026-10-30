@@ -177,7 +177,7 @@ async function create() {
             id="reading-title"
             v-model="title"
             maxlength="200"
-            placeholder="e.g. Mill — On Liberty, Chapter 2"
+            placeholder="e.g. Mill, On Liberty, Chapter 2"
             autofocus
           />
         </div>

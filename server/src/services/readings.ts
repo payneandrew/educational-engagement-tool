@@ -4,7 +4,7 @@ import { annotations, readings } from '../db'
 import type { ReadingDoc, UserDoc } from '../db/models'
 import type { CreateReadingInput } from '../schemas'
 
-/** Wire shape for REST. Inferred types flow from here to the Vue app via Hono RPC. */
+/** Wire shape for REST. */
 export type ReadingDTO = Omit<ReadingDoc, '_id' | 'createdAt'> & { id: string; createdAt: string }
 
 export const toReadingDTO = ({ _id, createdAt, ...rest }: ReadingDoc): ReadingDTO => ({
@@ -19,12 +19,11 @@ export interface ReadingStats {
   /** Distinct authors. Only students can post, so this is the number of students participating. */
   studentCount: number
 }
-/** A reading as listed: its details plus its activity counts. */
 export type ReadingListItemDTO = ReadingDTO & ReadingStats
 
 const NO_ACTIVITY: ReadingStats = { annotationCount: 0, studentCount: 0 }
 
-/** One pass over the annotations, grouped by reading. Readings nobody has annotated don't appear. */
+/** Counts per reading in one aggregation; readings with no annotations are absent. */
 async function statsByReading(): Promise<Map<string, ReadingStats>> {
   const rows = await annotations
     .aggregate<ReadingStats & { _id: string }>([
@@ -41,7 +40,7 @@ async function statsByReading(): Promise<Map<string, ReadingStats>> {
   return new Map(rows.map(({ _id, ...stats }) => [_id, stats]))
 }
 
-/** Newest first, so a reading an instructor just assigned is at the top. Each carries its activity counts. */
+/** Newest first, each with its activity counts. */
 export async function listReadings(): Promise<ReadingListItemDTO[]> {
   const [list, stats] = await Promise.all([
     readings.find().sort({ createdAt: -1 }).toArray(),
@@ -59,7 +58,6 @@ export async function getReading(id: string): Promise<ReadingDTO> {
   return toReadingDTO(reading)
 }
 
-/** Callers must already have checked the user is an instructor (the route's `requireInstructor`). */
 export async function createReading(
   instructor: UserDoc,
   input: CreateReadingInput,
@@ -73,5 +71,5 @@ export async function createReading(
     createdAt: new Date(),
   }
   await readings.insertOne(reading)
-  return { ...toReadingDTO(reading), ...NO_ACTIVITY } // same shape as a list entry, so the client can add it straight to the list
+  return { ...toReadingDTO(reading), ...NO_ACTIVITY } // same shape as a list entry
 }

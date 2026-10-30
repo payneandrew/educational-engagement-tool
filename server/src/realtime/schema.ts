@@ -1,13 +1,9 @@
 import * as z from 'zod/mini'
 
-/**
- * The shapes on a reading's live stream, as zod schemas: the server's types come from them (`z.infer`)
- * and the browser parses with them, so what is sent and what is trusted on arrival can't drift apart.
- * Kept free of Node imports (unlike events.ts) so the Vue app can import it at runtime, and written with
- * `zod/mini` so that import adds little to the browser bundle (full zod is ~25 kB gzipped more).
- */
+// Zod schemas for the live stream. The server's types are inferred from them and the browser parses
+// with them, so they can't drift. No Node imports, and `zod/mini` keeps the browser bundle small.
 
-/** Wire shape for REST and SSE. Inferred types flow from here to the Vue app via Hono RPC. */
+/** Wire shape for REST and SSE. */
 export const annotationSchema = z.object({
   id: z.string(),
   readingId: z.string(),
@@ -43,7 +39,7 @@ export const readingEventSchema = z.discriminatedUnion('type', [
 ])
 export type ReadingEvent = z.infer<typeof readingEventSchema>
 
-/** One SSE message's data → the event it carries, or undefined if it isn't one. Never throws. */
+/** Parses one SSE message; undefined if it isn't a valid event. */
 export function parseReadingEvent(data: string): ReadingEvent | undefined {
   try {
     const result = z.safeParse(readingEventSchema, JSON.parse(data))

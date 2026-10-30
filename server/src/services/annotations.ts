@@ -7,7 +7,6 @@ import type { AnnotationDTO } from '../realtime/schema'
 
 export type { AnnotationDTO } from '../realtime/schema'
 
-/** What deleting an annotation answers with: the id that is gone (its replies went with it). */
 export type DeletedAnnotationDTO = { id: string }
 
 export const toAnnotationDTO = ({
@@ -22,7 +21,7 @@ export const toAnnotationDTO = ({
   ...rest,
 })
 
-/** Every write tells the reading's live viewers what changed, after it has been saved. */
+/** Broadcasts a saved write to the reading's live viewers. */
 function publishSaved(annotation: AnnotationDoc): AnnotationDTO {
   const dto = toAnnotationDTO(annotation)
   publish(annotation.readingId, { type: 'annotation', annotation: dto })
@@ -43,9 +42,8 @@ const newAnnotation = (
 })
 
 /**
- * Saves a new post. Ids can come from the client, which makes retries safe: if a post was saved but
- * its response never arrived, the retry (same id) gets the original back instead of a duplicate. Any
- * other clash on the id is refused, without revealing the post that holds it.
+ * Saves a new post. Ids come from the client, so a retry of a saved post (same id and content) gets
+ * the original back instead of a duplicate. Any other id clash is a 409.
  */
 async function insert(annotation: AnnotationDoc): Promise<AnnotationDTO> {
   try {
@@ -94,7 +92,6 @@ export async function createReply(
   )
 }
 
-/** Only the author may change a post. */
 async function loadOwn(user: UserDoc, id: string): Promise<AnnotationDoc> {
   const annotation = await annotations.findOne({ _id: id })
   if (!annotation) throw new HTTPException(404, { message: 'annotation not found' })
@@ -109,21 +106,20 @@ export async function updateAnnotation(
   body: string,
 ): Promise<AnnotationDTO> {
   const current = await loadOwn(user, id)
-  // Saving the same words changes nothing: not marked edited, and nobody is notified.
+  // Same words: not marked edited, nobody notified.
   if (current.body === body) return toAnnotationDTO(current)
   const updated = await annotations.findOneAndUpdate(
     { _id: id },
     { $set: { body, editedAt: new Date() } },
     { returnDocument: 'after' },
   )
-  if (!updated) throw new HTTPException(404, { message: 'annotation not found' }) // deleted between the check and the update
+  if (!updated) throw new HTTPException(404, { message: 'annotation not found' }) // deleted meanwhile
   return publishSaved(updated)
 }
 
 /**
- * Deleting a top-level annotation deletes its replies too: a thread without its opening comment has
- * no context. One deleteMany does both (a reply has no replies, so for one this deletes just itself).
- * The event carries only this id; clients drop its replies themselves, since they know each parentId.
+ * Deleting a top-level annotation deletes its replies too. The event carries only this id; clients
+ * drop the replies themselves via parentId.
  */
 export async function deleteAnnotation(user: UserDoc, id: string): Promise<DeletedAnnotationDTO> {
   const annotation = await loadOwn(user, id)
@@ -132,6 +128,6 @@ export async function deleteAnnotation(user: UserDoc, id: string): Promise<Delet
   return { id }
 }
 
-/** A reading's whole discussion, newest first. The client groups replies under their roots. */
+/** A reading's whole discussion, newest first. */
 export const listAnnotations = async (readingId: string): Promise<AnnotationDTO[]> =>
   (await annotations.find({ readingId }).sort({ createdAt: -1 }).toArray()).map(toAnnotationDTO)

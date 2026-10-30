@@ -61,7 +61,7 @@ export const DEMO_READINGS: ReadingDoc[] = [
     _id: 'arendt-eichmann-epilogue',
     title: 'Arendt — Eichmann in Jerusalem, Epilogue',
     description:
-      'Read the Epilogue closely. Arendt makes three separate arguments about the trial: one about jurisdiction, one about the nature of the crime, and one about judgment itself. Before you annotate, try to state each in a single sentence. Then pick the one you find least convincing and explain why, with reference to a specific passage. We will spend the whole of next week’s seminar on this, so take your time.',
+      'Read the Epilogue closely. Arendt makes three arguments about the trial: jurisdiction, the nature of the crime, and judgment itself. Pick the one you find least convincing and say why, citing a passage.',
     ...dana,
     createdAt: assignedOn(10, 20),
   },

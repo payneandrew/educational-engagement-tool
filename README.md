@@ -1,4 +1,4 @@
-# Gloss — a collaborative reading app
+# Gloss: a collaborative reading app
 
 Instructors assign readings; students discuss them through annotations (comments on a whole reading), with replies, live updates, and edit/delete of their own posts.
 

@@ -7,7 +7,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
   resolve: {
-    // `@/…` = web/src/…, as in create-vue projects. Mirrored in tsconfig.json `paths`.
+    // `@/` = web/src/, as in create-vue projects. Mirrored in tsconfig.json `paths`.
     alias: { '@': fileURLToPath(new URL('./web/src', import.meta.url)) },
   },
   test: {

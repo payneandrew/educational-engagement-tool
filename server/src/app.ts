@@ -11,7 +11,7 @@ import { usersRoutes } from './routes/users'
  *
  * Mounting with ONE chained expression is what makes Hono RPC work: each `.route()` returns a type
  * that accumulates the router's paths, validated inputs and JSON outputs, so `typeof app` is the
- * whole API contract. The Vue app imports `AppType` and gets a typed client from `hc<AppType>` — no
+ * whole API contract. The Vue app imports `AppType` and gets a typed client from `hc<AppType>`, no
  * codegen, no hand-written types. (Splitting this into separate `app.route(...)` statements, or the
  * routers into `router.get(...)` statements, would discard that accumulation.)
  */

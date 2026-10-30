@@ -4,14 +4,12 @@ import { onMounted, onUnmounted, reactive, watch, type Ref } from 'vue'
 const DWELL_MS = 1000
 
 /**
- * Unread tracking for the posts tagged "New" (`newIds`), in a discussion that scrolls: the panel on
- * desktop, the whole page on phones.
- * - A new post is read once it has stayed near the middle of the screen for DWELL_MS while the tab is
- *   visible. It then leaves `newIds`, so its tag fades. A post at the very edge hasn't been reached yet,
- *   and a post taller than the screen counts as soon as part of it is in the middle.
- * - `hidden` counts the unread posts scrolled out of view, above and below, for the "N new" pills.
+ * Unread tracking for posts tagged "New" (`newIds`) in a scrolling discussion.
+ * - A post is read once it stays near the middle of the screen for DWELL_MS while the tab is visible;
+ *   it then leaves `newIds` and its tag fades.
+ * - `hidden` counts unread posts scrolled out of view, for the "N new" pills.
  *
- * `rendered` is anything that changes when the list does, so the observers follow the posts on screen.
+ * `rendered` is anything that changes when the list does, so the observers follow the posts.
  */
 export function useUnreadPosts(
   scroller: Ref<HTMLElement | undefined>,
@@ -40,7 +38,6 @@ export function useUnreadPosts(
   }
   const stopAllDwells = () => [...dwelling.keys()].forEach(stopDwell)
 
-  /** Which edge of the visible part of the panel a post is past, if any. */
   function hiddenSide(post: Element, panel: DOMRect): 'above' | 'below' | null {
     const { top, bottom } = post.getBoundingClientRect()
     if (bottom < Math.max(panel.top, 0)) return 'above'
@@ -54,8 +51,7 @@ export function useUnreadPosts(
     hidden.below = sides.filter((side) => side === 'below').length
   }
 
-  // Both observers see the screen through the panel's scrolling. One watches the middle of it, for
-  // reading; the other the whole of it, for the pills.
+  // One observer watches the middle of the screen (reading), the other all of it (pills).
   const middleObserver = new IntersectionObserver(
     (entries) => {
       for (const { target, isIntersecting } of entries) {
@@ -73,7 +69,7 @@ export function useUnreadPosts(
   )
   const screenObserver = new IntersectionObserver(measure)
 
-  /** Point both observers at the posts now tagged New (observing starts with a report of where each is). */
+  /** Point both observers at the posts now tagged New. */
   function track() {
     middleObserver.disconnect()
     screenObserver.disconnect()
@@ -84,7 +80,7 @@ export function useUnreadPosts(
     measure()
   }
 
-  // Looking away stops the clock; coming back restarts it for whatever is still in the middle.
+  // Looking away stops the clock; coming back restarts it.
   function onVisibilityChange() {
     if (document.hidden) stopAllDwells()
     else inMiddle.forEach(startDwell)

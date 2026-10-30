@@ -16,7 +16,7 @@ const send = async (method: string, path: string, userId: string, json?: unknown
 const post = (userId: string, json: unknown) => send('POST', '/readings', userId, json)
 
 describe('GET /readings', () => {
-  it('includes each reading’s annotation count (replies included) and unique students', async () => {
+  it('counts annotations (replies included) and unique students per reading', async () => {
     const list: { id: string; annotationCount: number; studentCount: number }[] = await (
       await app.request('/api/readings', { headers: { 'x-user-id': 'u-dana' } })
     ).json()
@@ -34,7 +34,7 @@ describe('GET /readings', () => {
 
 // Runs against the plain seed data, before the tests below add annotations.
 describe('GET /participation', () => {
-  it('counts every student on every reading, including students who have not posted', async () => {
+  it('counts every student on every reading, even those who have not posted', async () => {
     await users.insertOne({ _id: 'u-quiet', name: 'Quinn Park', role: 'student' })
 
     const res = await send('GET', '/participation', 'u-dana')

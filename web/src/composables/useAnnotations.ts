@@ -10,25 +10,21 @@ import { newId, withRetry } from '@/api/retry'
 
 /**
  * One reading's discussion: the annotations, the live connection, and the actions that change them.
- * The reading page creates it with `provideAnnotations`; components below it get it with `useAnnotations`.
  *
- * Every time the SSE stream (re)connects we load the full list from the API, then apply live events
- * on top. Loading on reconnect covers anything missed while disconnected, so the server never needs
- * to replay history. Events that arrive while a load is in flight are held back and applied after it,
- * so a slow response can't overwrite a newer edit or bring back a deleted post.
+ * Each time the SSE stream (re)connects we load the full list, then apply live events on top, so the
+ * server never replays history. Events that arrive during a load are held and applied after it, so a
+ * slow response can't overwrite a newer edit or bring back a deleted post.
  */
 function createAnnotations(readingId: string) {
   const byId = reactive<Record<string, Annotation>>({})
-  /** True only after an established stream drops, so the first connect doesn't flash a warning. */
+  /** Only true after an established stream drops. */
   const connectionLost = ref(false)
-  /** Who has this reading open right now, from the server's `viewers` events. */
   const viewers = ref<Viewer[]>([])
   const loadError = ref('')
-  /** True until the first load finishes. Reloads after a reconnect keep showing the current list. */
   const loading = ref(true)
-  /** Posts that arrived live from someone else since the page opened; the feed marks them "New". */
+  /** Posts from other people that arrived live; the feed tags them "New". */
   const newIds = reactive(new Set<string>())
-  /** Read out by an aria-live region, so screen reader users hear about live arrivals too. */
+  /** Read out by an aria-live region. */
   const announcement = ref('')
   let eventSource: EventSource | undefined
   let retryTimer: ReturnType<typeof setTimeout> | undefined
@@ -43,7 +39,7 @@ function createAnnotations(readingId: string) {
         if (annotation.id === event.id || annotation.parentId === event.id)
           delete byId[annotation.id]
   }
-  /** A live post someone else just wrote (not an edit, and not the echo of this user's own write). */
+  /** A live post by someone else (not an edit, not the echo of our own write). */
   function noteArrival({ id, authorId, authorName, kind }: Annotation) {
     if (loading.value || byId[id] || authorId === currentUserId.value) return
     newIds.add(id)
@@ -83,7 +79,6 @@ function createAnnotations(readingId: string) {
       connectionLost.value = false
       void load()
     }
-    // Each message is one ReadingEvent, serialized by the server's stream route.
     eventSource.onmessage = (message: MessageEvent<string>) => {
       const event = parseReadingEvent(message.data)
       if (!event) return console.warn('Ignored a live update it could not read:', message.data)
@@ -95,8 +90,7 @@ function createAnnotations(readingId: string) {
     }
     eventSource.onerror = () => {
       connectionLost.value = true
-      // While CONNECTING the browser retries by itself. If it gave up (CLOSED, e.g. the server answered
-      // with an error status), open a fresh stream ourselves.
+      // The browser retries by itself unless it gave up (CLOSED), then we open a fresh stream.
       if (eventSource?.readyState === EventSource.CLOSED) retryTimer = setTimeout(connect, 3000)
     }
   }
@@ -122,7 +116,7 @@ function createAnnotations(readingId: string) {
   )
 
   const total = computed(() => all.value.length)
-  /** Everyone who has posted here, with how many annotations each, sorted by name. */
+  /** Everyone who has posted, with their annotation counts, sorted by name. */
   const authors = computed(() => {
     const authorsById = new Map<string, { id: string; name: string; count: number }>()
     for (const annotation of all.value) {
@@ -136,13 +130,11 @@ function createAnnotations(readingId: string) {
   // Only students can post, so the authors are the students participating.
   const studentCount = computed(() => authors.value.length)
 
-  /** True while one of this user's writes is in flight; the forms disable their buttons. */
   const busy = ref(false)
 
   /**
-   * Runs one of this user's writes and applies the result right away, so the author sees it without
-   * waiting for the SSE event (which arrives too and just sets the same values again). It goes through
-   * `receive`, like a live event, so the same ordering rules hold. Resolves to an error message, or null.
+   * Runs one of this user's writes and applies the result right away instead of waiting for the SSE
+   * echo. Goes through `receive`, so the same ordering rules hold. Resolves to an error message or null.
    */
   async function write(request: () => Promise<AnnotationEvent>): Promise<string | null> {
     busy.value = true
@@ -156,36 +148,31 @@ function createAnnotations(readingId: string) {
     }
   }
 
-  // New posts get their id here, before sending, so a retry after a lost response reuses it and the
-  // server returns the post it already saved instead of creating a second one.
-  const create = (body: string) => {
+  // The id is picked here so a retry after a lost response reuses it (the server dedupes on it).
+  const post = (
+    send: (json: { body: string; id: string }) => Promise<Annotation>,
+    body: string,
+  ) => {
     const id = newId()
     return write(async () => ({
       type: 'annotation',
-      annotation: await withRetry(async () =>
-        parseResponse(
-          client.api.readings[':id'].annotations.$post({
-            param: { id: readingId },
-            json: { body, id },
-          }),
-        ),
-      ),
+      annotation: await withRetry(() => send({ body, id })),
     }))
   }
-  const reply = (rootId: string, body: string) => {
-    const id = newId()
-    return write(async () => ({
-      type: 'annotation',
-      annotation: await withRetry(async () =>
+  const create = (body: string) =>
+    post(
+      (json) =>
         parseResponse(
-          client.api.annotations[':id'].replies.$post({
-            param: { id: rootId },
-            json: { body, id },
-          }),
+          client.api.readings[':id'].annotations.$post({ param: { id: readingId }, json }),
         ),
-      ),
-    }))
-  }
+      body,
+    )
+  const reply = (rootId: string, body: string) =>
+    post(
+      (json) =>
+        parseResponse(client.api.annotations[':id'].replies.$post({ param: { id: rootId }, json })),
+      body,
+    )
   const edit = (id: string, body: string) =>
     write(async () => ({
       type: 'annotation',
@@ -219,19 +206,17 @@ function createAnnotations(readingId: string) {
   }
 }
 
-/** One reading's discussion, as `useAnnotations()` hands it to components. */
 export type Annotations = ReturnType<typeof createAnnotations>
 
 const key: InjectionKey<Annotations> = Symbol('annotations')
 
-/** Called once by the reading page: opens the live connection and shares it with the components below. */
+/** Called once by the reading page: opens the connection and shares it with child components. */
 export function provideAnnotations(readingId: string): Annotations {
   const annotations = createAnnotations(readingId)
   provide(key, annotations)
   return annotations
 }
 
-/** For components inside the reading page. */
 export function useAnnotations(): Annotations {
   const annotations = inject(key)
   if (!annotations) throw new Error('useAnnotations() needs provideAnnotations() in a parent')
